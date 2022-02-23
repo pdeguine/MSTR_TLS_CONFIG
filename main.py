@@ -1,7 +1,4 @@
 import os
-import glob
-import winreg
-from xml.etree import ElementTree as eT
 from machine import Machine
 
 mstr_classpath = os.getenv('MSTR_CLASSPATH')
