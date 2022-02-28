@@ -11,6 +11,7 @@ import ctypes
 import sys
 import win32crypt
 import time
+import win32serviceutil
 
 path_exe = os.path.dirname(sys.executable)
 mstr_classpath = os.getenv('MSTR_CLASSPATH')
@@ -180,10 +181,10 @@ def configure_web():
         microstrategy_xml = eT.parse(microstrategy_xml_path)
         root = microstrategy_xml.getroot()
         print("[-] Configuring trust store in microstrategy.xml")
-        print(f"    [+] Setting sslTruststore to 'trusted.jks'")
+        print(f"    [+] Setting sslTruststore to '/WEB-INF/trusted.jks'")
         print(f"    [+] Setting sslTruststorePwd to {truststore_pw}")
         ts_path = root.find('global/parameter[@name="sslTruststore"]')
-        ts_path.set('value', "trusted.jks")
+        ts_path.set('value', "/WEB-INF/trusted.jks")
         ts_pw = root.find('global/parameter[@name="sslTruststorePwd"]')
         ts_pw.set('value', truststore_pw)
         microstrategy_xml.write(microstrategy_xml_path)
@@ -209,9 +210,15 @@ def configure_web():
             i_server_entries = root.findall('.//server')
 
             if i_server_entries:
+                entry_exists = False
                 for entry in i_server_entries:
-                    if entry.get('name').lower() == 'localhost' or entry.get('name').lower() == socket.gethostname():
+                    if entry.get('name').lower() == 'localhost' or entry.get('name').lower() == socket.gethostname()\
+                            or entry.get('name') == socket.gethostbyname(socket.gethostname()):
                         entry.set('name', fqdn)
+                        entry_exists = True
+                if not entry_exists:
+                    eT.SubElement(root, "server", conn="false", name=fqdn)
+                    xml.etree.ElementTree.indent(root)
             else:
                 eT.SubElement(root, "server", conn="false", name=fqdn)
                 xml.etree.ElementTree.indent(root)
@@ -416,7 +423,7 @@ else:
                       f"    To do so, copy the root certificate file onto the remote machine,\n"
                       f"    and select 'Install Certificate'. Follow the on-screen directions.\n\n"
                       f"[-] If MicroStrategy Web has been configured for SSL, it requires every Intelligence Server\n"
-                      f"    that is added tothe Web Administration page to be SSL enabled. To connect to non-SSL\n"
+                      f"    that is added to the Web Administration page to be SSL enabled. To connect to non-SSL\n"
                       f"    enabled Intelligence Server, go to the Web Administration page > Security and select\n"
                       f"    'No encryption'.")
                 input("\n\nPress ENTER to exit")
