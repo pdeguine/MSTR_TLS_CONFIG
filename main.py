@@ -11,7 +11,10 @@ import ctypes
 import sys
 import win32crypt
 import time
-import win32serviceutil
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
+
 
 path_exe = os.path.dirname(sys.executable)
 mstr_classpath = os.getenv('MSTR_CLASSPATH')
@@ -26,6 +29,7 @@ truststore_path = path_exe + "\\trusted.jks"
 truststore_pw = "m$tr!23"
 truststore_pem = path_exe + "\\MSTRTSRootCA.pem"
 root_certificate = path_exe + "\\MSTRTSRootCA.crt"
+i_server_pfx = path_exe + "\\iserver.pfx"
 ssl_port = 39321
 fqdn = socket.getfqdn().upper()
 
@@ -96,6 +100,17 @@ def i_server_enable_ssl():
             winreg.SetValueEx(reg_key, "KeyPath", 0, winreg.REG_SZ, key_path)
             winreg.SetValueEx(reg_key, "CertificateKeyPassword", 0, winreg.REG_SZ, key_password)
             winreg.SetValueEx(reg_key, "SSLPort", 0, winreg.REG_DWORD, int(hex(ssl_port), 16))
+    print(f"    [+] Enabling SSL for REST API port")
+    # Get iserver cert fingerprint
+    with open(certificate_path, 'rb') as cert:
+        certificate = x509.load_pem_x509_certificate(cert.read(), default_backend())
+        fingerprint = str(certificate.fingerprint(hashes.SHA1()).hex())
+
+    os.system(f"certutil -f -p m$tr!23 -importpfx {i_server_pfx}")
+    os.system("netsh http delete ssl ipport=0.0.0.0:34962")
+    os.system('netsh http add sslcert ipport=0.0.0.0:34962 certstorename=My certhash=' + fingerprint +
+              ' appid="{00112233-4455-6677-8899-AABBCCDDEEFF}" ')
+
     print(f"[-] SUCCESS: Intelligence Server has been configured for SSL connections on port {ssl_port}.\n\n")
 
 
