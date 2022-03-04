@@ -398,47 +398,48 @@ else:
         if not os.path.exists(ssl_artifact):
             print(f"WARNING: {ssl_artifact} not found. Make sure it exists in same directory as the executable.\n\n")
             input("Press ENTER to exit.")
-        else:
-            print("[-] Checking installed components ...\n")
-            installed_components = check_installed_components()
-            for component in installed_components:
-                print("     [+] " + component + " ... " +
-                      "Found" if installed_components[component]["installed"] else "Not found")
+            exit()
 
-            print("Note: Current release only supports default MicroStrategy and Library deployment names\n\n")
-            if input("CONFIRM: MicroStrategy services will be restarted automatically if required. "
-                     "Confirm you want to proceed. (Y/N) ").lower() == 'y':
-                print("\n")
-                for component in installed_components:
-                    if installed_components[component]["installed"]:
-                        print(f">> Configuring {component} ...\n")
-                        installed_components[component]["func"]()
-                        time.sleep(1)
-                if installed_components["Intelligence Server"]["installed"]:
-                    print("[-] Restarting Intelligence Server.\n")
-                    restart_intelligence_server()
-                if installed_components["Tomcat"]["installed"]:
-                    print("[-] Restarting Tomcat. It may take a couple of minutes before it has fully initialized.\n")
-                    restart_tomcat()
-                if installed_components["Collaboration Server"]["installed"]:
-                    print("[-] Restarting Collaboration Server.\n")
-                    restart_collab()
-                print("[-] Installing root certificate into Windows Certificate Store.\n")
-                install_ca_cert()
-                print("[-] Configuration complete.\n\n")
-                print("----------------------------------------------------\n")
-                print("Please read:\n")
-                print(f"[-] Use the fully qualified domain name ({fqdn.lower()}) to connect to Tomcat.\n"
-                      f"    E.g. https://{fqdn.lower()}:8443/MicroStrategyLibrary for Library\n"
-                      f"    Without the FQDN, the browser will throw a certificate warning.\n\n"
-                      f"[-] The root CA certificate has already been installed into the Windows certificate store on\n"
-                      f"    this machine. If not, install it manually. To connect to this Tomcat server \n"
-                      f"    from a remote machine, install first the root certificate ({root_certificate})\n"
-                      f"    on the remote machine to avoid browser security warnings.\n"
-                      f"    To do so, copy the root certificate file onto the remote machine,\n"
-                      f"    and select 'Install Certificate'. Follow the on-screen directions.\n\n"
-                      f"[-] If MicroStrategy Web has been configured for SSL, it requires every Intelligence Server\n"
-                      f"    that is added to the Web Administration page to be SSL enabled. To connect to non-SSL\n"
-                      f"    enabled Intelligence Server, go to the Web Administration page > Security and select\n"
-                      f"    'No encryption'.")
-                input("\n\nPress ENTER to exit")
+    print("[-] Checking installed components ...\n")
+    installed_components = check_installed_components()
+    for component in installed_components:
+        print("     [+] " + component + " ... " +
+              "Found" if installed_components[component]["installed"] else "Not found")
+
+    print("Note: Current release only supports default MicroStrategy and Library deployment names\n\n")
+    if input("CONFIRM: MicroStrategy services will be restarted automatically if required. "
+             "Confirm you want to proceed. (Y/N) ").lower() == 'y':
+        print("\n")
+        for component in installed_components:
+            if installed_components[component]["installed"]:
+                print(f">> Configuring {component} ...\n")
+                installed_components[component]["func"]()
+                time.sleep(1)
+        if installed_components["Intelligence Server"]["installed"]:
+            print("[-] Restarting Intelligence Server.\n")
+            restart_intelligence_server()
+        if installed_components["Tomcat"]["installed"]:
+            print("[-] Restarting Tomcat. It may take a couple of minutes before it has fully initialized.\n")
+            restart_tomcat()
+        if installed_components["Collaboration Server"]["installed"]:
+            print("[-] Restarting Collaboration Server.\n")
+            restart_collab()
+        print("[-] Installing root certificate into Windows Certificate Store.\n")
+        install_ca_cert()
+        print("[-] Configuration complete.\n\n")
+        print("----------------------------------------------------\n")
+        print("Please read:\n")
+        print(f"[-] Use the fully qualified domain name ({fqdn.lower()}) to connect to Tomcat.\n"
+              f"    E.g. https://{fqdn.lower()}:8443/MicroStrategyLibrary for Library\n"
+              f"    Without the FQDN, the browser will throw a certificate warning.\n\n"
+              f"[-] The root CA certificate has already been installed into the Windows certificate store on\n"
+              f"    this machine. If not, install it manually. To connect to this Tomcat server \n"
+              f"    from a remote machine, install first the root certificate ({root_certificate})\n"
+              f"    on the remote machine to avoid browser security warnings.\n"
+              f"    To do so, copy the root certificate file onto the remote machine,\n"
+              f"    and select 'Install Certificate'. Follow the on-screen directions.\n\n"
+              f"[-] If MicroStrategy Web has been configured for SSL, it requires every Intelligence Server\n"
+              f"    that is added to the Web Administration page to be SSL enabled. To connect to non-SSL\n"
+              f"    enabled Intelligence Server, go to the Web Administration page > Security and select\n"
+              f"    'No encryption'.")
+        input("\n\nPress ENTER to exit")
