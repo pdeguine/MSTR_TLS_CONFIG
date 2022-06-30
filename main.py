@@ -1,6 +1,7 @@
 import os
 import ctypes
 import configManager
+import sys
 
 PATH_EXE = os.path.dirname(sys.executable)
 KEYSTORE_PW = 'm$tr!23'
