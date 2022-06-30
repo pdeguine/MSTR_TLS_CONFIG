@@ -2,8 +2,7 @@ import os
 import ctypes
 import configManager
 
-# PATH_EXE = os.path.dirname(sys.executable)
-PATH_EXE = 'c:\\ssl (1)'
+PATH_EXE = os.path.dirname(sys.executable)
 KEYSTORE_PW = 'm$tr!23'
 KEYSTORE = 'TSkeystore.pfx'
 CERTIFICATE = "iserver_cert.pem"
