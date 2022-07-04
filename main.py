@@ -1,9 +1,11 @@
 import os
 import ctypes
 import configManager
+import socket
 import sys
 
-PATH_EXE = os.path.dirname(sys.executable)
+PATH_EXE = "c:\\ssl"
+# PATH_EXE = os.path.dirname(sys.executable)
 KEYSTORE_PW = 'm$tr!23'
 KEYSTORE = 'TSkeystore.pfx'
 CERTIFICATE = "iserver_cert.pem"
@@ -17,6 +19,7 @@ TRUSTSTORE_PEM = "MSTRTSRootCA.pem"
 ROOT_CERTIFICATE = "MSTRTSRootCA.crt"
 I_SERVER_PFX = "iserver.pfx"
 SSL_PORT = 39321
+FQDN = socket.getfqdn().upper()
 
 
 def build_config(ssl_toggle):
@@ -66,6 +69,76 @@ def build_config(ssl_toggle):
     return config
 
 
+parameters = {
+    "Intelligence Server": [],
+    "Tomcat": {
+        "server.xml": {
+            'Service/Connector[@port="8443"]': {
+                'keystoreFile': str(PATH_EXE + '/' + KEYSTORE).replace('/', '\\'),
+                'keystorePass': KEYSTORE_PW
+            }
+        }
+    },
+    "Web": {
+        "adminServers.xml": {
+            f'server[@name="{FQDN}"]': {
+                "name": FQDN,
+                "conn": "false"
+            }
+
+        },
+        "microstrategy.xml": {
+            'global/parameter[@name="sslTruststore"]': {
+                "value": str("WEB-INF" + '/' + TRUSTSTORE).replace('\\', '/')
+            },
+            'global/parameter[@name="sslTruststorePwd"]': {
+                "value": TRUSTSTORE_PW
+            }
+        },
+        "sys_defaults.properties": {
+            "useEncryption": "2"
+        },
+        f"sys_defaults.{FQDN}.properties": {
+            "connectmode": "auto"
+        }
+    },
+    "Library": {
+        "configOverride.properties":
+            {
+                "trustStore.path": "file:" + str(PATH_EXE + '/' + TRUSTSTORE).replace('\\', '/'),
+                "trustStore.passphrase": TRUSTSTORE_PW,
+                "iserver.default.hostname": FQDN,
+                "iserver.default.port": SSL_PORT,
+                "iserver.tlsEnabled": "true"
+            }
+    },
+    "Collaboration Server": {
+        "config.json": {
+            "enableTls": "true",
+            "keystoreFile": str(PATH_EXE + '/' + KEYSTORE).replace('\\', '/'),
+            "passphrase": KEYSTORE_PW,
+            "trustedCerts": [str(PATH_EXE + '/' + TRUSTSTORE_PEM).replace('\\', '/')],
+            "authorizationServerUrl": f"https://{FQDN.lower()}:8443/MicroStrategyLibrary/api"
+        }
+    },
+    "Modeling Service": {
+        "application.conf": {
+            "https.port": "10443",
+            "play.server.https.keyStore.path": '"' + PATH_EXE.replace("\\", "/") + '/' + KEYSTORE + '"',
+            "play.server.https.keyStore.type": "JKS",
+            "play.server.https.keyStore.password": '"' + KEYSTORE_PW + '"'
+        },
+        "modelservice.conf": {
+            "modelservice.iserver.tlsEnabled": "true",
+            "modelservice.trustStore.path": str(PATH_EXE + '/' + TRUSTSTORE).replace('\\', '/'),
+            "modelservice.trustStore.passphrase": TRUSTSTORE_PW
+        },
+        "configOverride.properties": {
+            "services.MicroStrategy-Modeling-Service.tlsEnabled": "true",
+            "services.MicroStrategy-Modeling-Service.baseURL": f"https://{FQDN.lower()}:10443"
+        }
+    }
+}
 
 # Execution
 print("-----------------------------------------------------------------")
@@ -87,16 +160,16 @@ else:
         input("\n\nPress ENTER to exit")
         exit()
 
-configManager = configManager.ConfigManager(build_config(ssl_toggle), ssl_toggle)
+configManager = configManager.ConfigManager(build_config(ssl_toggle), ssl_toggle, parameters)
 print("Note: Current release only supports default MicroStrategy and Library deployment names\n\n")
 if input("CONFIRM: MicroStrategy services will be restarted automatically if required. "
          "Confirm you want to proceed. (Y/N) ").lower() == 'y':
     print("\n")
 configManager.apply()
-configManager.restart()
+# configManager.restart()
 
 print("[-] Installing root certificate into Windows Certificate Store.\n")
-configManager.install_ca_cert()
+# configManager.install_ca_cert()
 print("[-] Configuration complete.\n\n")
 print("----------------------------------------------------\n")
 print("Please read:\n")

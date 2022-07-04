@@ -15,7 +15,7 @@ from cryptography.hazmat.primitives import hashes
 
 
 class ConfigManager:
-    def __init__(self, config, ssl_toggle):
+    def __init__(self, config, ssl_toggle, parameters):
         self.ssl_toggle = ssl_toggle
         self.mstr_classpath = os.getenv('MSTR_CLASSPATH')
         self.keystore_pw = config["keystore_pw"]
@@ -31,6 +31,7 @@ class ConfigManager:
         self.ssl_port = config["ssl_port"]
         self.fqdn = socket.getfqdn().upper()
         self.components = self.check_installed_components()
+        self.parameters = parameters
 
     def check_installed_components(self):
         components = {
@@ -164,26 +165,22 @@ class ConfigManager:
 
     def tomcat_configure(self):
         server_xml_path = self.components["Tomcat"]["path"] + "\\conf\\server.xml"
-        try:
-            shutil.copyfile(server_xml_path,
-                            server_xml_path + '_sslconfig_backup_' + datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
-        except IOError:
-            print(f"ERROR: Unable to locate server.xml under {server_xml_path}")
+        if self.backup_file(server_xml_path):
+            self.update_config_file(server_xml_path, self.parameters["Tomcat"]["server.xml"])
+            # server_xml = eT.parse(server_xml_path)
+            # root = server_xml.getroot()
+            # ssl_connector = root.find('Service/Connector[@port="8443"]')
+            # ssl_connector.set('keystoreFile', self.keystore_path)
+            # ssl_connector.set('keystorePass', self.keystore_pw)
+            # server_xml.write(server_xml_path)
+            # if self.ssl_toggle:
+            #     print(f'    [+] Setting keystoreFile to {self.keystore_path}')
+            #     print(f'    [+] Setting keystorePass to {self.keystore_pw}')
+            #     print('[-] SUCCESS: Tomcat has been configured for SSL on port 8443.\n\n')
+            # else:
+            #     print('[-] SUCCESS: Tomcat TLS configuration has been disabled.\n\n')
         else:
-            print('[-] Backing up server.xml')
-
-            server_xml = eT.parse(server_xml_path)
-            root = server_xml.getroot()
-            ssl_connector = root.find('Service/Connector[@port="8443"]')
-            ssl_connector.set('keystoreFile', self.keystore_path)
-            ssl_connector.set('keystorePass', self.keystore_pw)
-            server_xml.write(server_xml_path)
-            if self.ssl_toggle:
-                print(f'    [+] Setting keystoreFile to {self.keystore_path}')
-                print(f'    [+] Setting keystorePass to {self.keystore_pw}')
-                print('[-] SUCCESS: Tomcat has been configured for SSL on port 8443.\n\n')
-            else:
-                print('[-] SUCCESS: Tomcat TLS configuration has been disabled.\n\n')
+            pass
 
     def restart_tomcat(self):
         if os.system('sc query "tomcat9" | find "RUNNING" >nul') == 0:
@@ -193,61 +190,58 @@ class ConfigManager:
 
     def configure_collab(self):
         config_json_path = self.components["Collaboration Server"]["path"]
-        try:
-            shutil.copyfile(config_json_path,
-                            config_json_path + '_sslconfig_backup_' + datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
-        except IOError:
-            print(f"ERROR: Collaboration Server config.json not found under {config_json_path}.")
+        if self.backup_file(config_json_path):
+            self.update_config_file(config_json_path,self.parameters["Collaboration Server"]["config.json"])
+            # if self.ssl_toggle:
+            #     print(f"    [+] Setting enableTls to 'true'")
+            #     print(f"    [+] Setting keystoreFile to {self.keystore_path}")
+            #     print(f"    [+] Setting passphrase to {self.keystore_pw}")
+            #     print(f"    [+] Setting trustedCerts to {self.truststore_pem}")
+            #     with open(config_json_path, 'r+') as config_json:
+            #         data = json.load(config_json)
+            #         data['enableTls'] = "true"
+            #         data['keystoreFile'] = self.keystore_path.replace('\\', '/')
+            #         data['passphrase'] = self.keystore_pw
+            #         data["trustedCerts"] = [self.truststore_pem.replace('\\', '/')]
+            #         data["authorizationServerUrl"] = f"https://{self.fqdn.lower()}:8443/MicroStrategyLibrary/api"
+            #         config_json.truncate(0)
+            #         config_json.seek(0)
+            #         config_json.write(json.dumps(data, indent=3))
+            #     print(f"[-] SUCCESS: Collaboration Server has been configured. "
+            #           f"It can be accessed under https://{self.fqdn.lower()}:3000\n\n")
+            #
+            # else:
+            #     with open(config_json_path, 'r+') as config_json:
+            #         data = json.load(config_json)
+            #
+            #         try:
+            #             del data['enableTls']
+            #         except KeyError:
+            #             pass
+            #
+            #         try:
+            #             del data['keystoreFile']
+            #         except KeyError:
+            #             pass
+            #
+            #         try:
+            #             del data['passphrase']
+            #         except KeyError:
+            #             pass
+            #
+            #         try:
+            #             del data["trustedCerts"]
+            #         except KeyError:
+            #             pass
+            #
+            #         data["authorizationServerUrl"] = f"http://{self.fqdn.lower()}:8080/MicroStrategyLibrary/api"
+            #         config_json.truncate(0)
+            #         config_json.seek(0)
+            #         config_json.write(json.dumps(data, indent=3))
+            #     print(f"[-] SUCCESS: Collaboration Server has been configured. "
+            #           f"It can be accessed under http://{self.fqdn.lower()}:3000\n\n")
         else:
-            print("[-] Backing up config.json")
-            if self.ssl_toggle:
-                print(f"    [+] Setting enableTls to 'true'")
-                print(f"    [+] Setting keystoreFile to {self.keystore_path}")
-                print(f"    [+] Setting passphrase to {self.keystore_pw}")
-                print(f"    [+] Setting trustedCerts to {self.truststore_pem}")
-                with open(config_json_path, 'r+') as config_json:
-                    data = json.load(config_json)
-                    data['enableTls'] = "true"
-                    data['keystoreFile'] = self.keystore_path.replace('\\', '/')
-                    data['passphrase'] = self.keystore_pw
-                    data["trustedCerts"] = [self.truststore_pem.replace('\\', '/')]
-                    data["authorizationServerUrl"] = f"https://{self.fqdn.lower()}:8443/MicroStrategyLibrary/api"
-                    config_json.truncate(0)
-                    config_json.seek(0)
-                    config_json.write(json.dumps(data, indent=3))
-                print(f"[-] SUCCESS: Collaboration Server has been configured. "
-                      f"It can be accessed under https://{self.fqdn.lower()}:3000\n\n")
-
-            else:
-                with open(config_json_path, 'r+') as config_json:
-                    data = json.load(config_json)
-
-                    try:
-                        del data['enableTls']
-                    except KeyError:
-                        pass
-
-                    try:
-                        del data['keystoreFile']
-                    except KeyError:
-                        pass
-
-                    try:
-                        del data['passphrase']
-                    except KeyError:
-                        pass
-
-                    try:
-                        del data["trustedCerts"]
-                    except KeyError:
-                        pass
-
-                    data["authorizationServerUrl"] = f"http://{self.fqdn.lower()}:8080/MicroStrategyLibrary/api"
-                    config_json.truncate(0)
-                    config_json.seek(0)
-                    config_json.write(json.dumps(data, indent=3))
-                print(f"[-] SUCCESS: Collaboration Server has been configured. "
-                      f"It can be accessed under http://{self.fqdn.lower()}:3000\n\n")
+            pass
 
     def restart_collab(self):
         if os.system('sc query "MSTR_collaboration" | find "RUNNING" >nul') == 0:
@@ -256,488 +250,490 @@ class ConfigManager:
             os.system('net start "MSTR_collaboration"')
 
     def configure_web(self):
-        # Backup and update microstrategy.xml with truststore
         microstrategy_xml_path = self.components["Web"]["path"] + "\\WEB-INF\\microstrategy.xml"
-        print(microstrategy_xml_path)
-        try:
-            shutil.copyfile(microstrategy_xml_path,
-                            microstrategy_xml_path + '_sslconfig_backup_' + datetime.datetime.now().strftime(
-                                '%Y%m%d_%H%M%S'))
-        except IOError:
-            print(f"ERROR: Unable to locate microstrategy.xml under {microstrategy_xml_path}")
+        if self.backup_file(microstrategy_xml_path):
+            self.update_config_file(microstrategy_xml_path, self.parameters["Web"]["microstrategy.xml"])
+            print("[-] Copying truststore to " + self.components["Web"]["path"] + "\\WEB-INF\\trusted.jks")
+            shutil.copyfile(self.truststore_path,
+                            self.components["Web"]["path"] + "\\WEB-INF\\trusted.jks")
+
+        admin_server_xml_path = self.components["Web"]["path"] + "\\WEB-INF\\xml\\AdminServers.xml"
+        if self.backup_file(admin_server_xml_path):
+            self.update_config_file(admin_server_xml_path, self.parameters["Web"]["adminServers.xml"])
+
+        sys_defaults_properties_path = self.components["Web"]["path"] + "\\WEB-INF\\xml\\sys_defaults.properties"
+        if self.backup_file(sys_defaults_properties_path):
+            self.update_config_file(sys_defaults_properties_path, self.parameters["Web"]["sys_defaults.properties"])
+
+        sys_defaults_i_server_properties_path = self.components["Web"]["path"] + "\\WEB-INF\\xml\\sys_defaults_" + \
+                               self.fqdn + ".properties"
+        if self.backup_file(sys_defaults_i_server_properties_path):
+            self.update_config_file(sys_defaults_i_server_properties_path, self.parameters["Web"][f"sys_defaults.{self.fqdn}.properties"])
+
+            #     print("[-] Enabling TLS/SSL encryption for this MicroStrategy Web deployment.")
+            # if self.ssl_toggle:
+            #     microstrategy_xml = eT.parse(microstrategy_xml_path)
+            #     root = microstrategy_xml.getroot()
+            #     print("[-] Configuring trust store in microstrategy.xml")
+            #     print(f"    [+] Setting sslTruststore to '/WEB-INF/trusted.jks'")
+            #     print(f"    [+] Setting sslTruststorePwd to {self.truststore_pw}")
+            #     ts_path = root.find('global/parameter[@name="sslTruststore"]')
+            #     ts_path.set('value', "/WEB-INF/trusted.jks")
+            #     ts_pw = root.find('global/parameter[@name="sslTruststorePwd"]')
+            #     ts_pw.set('value', self.truststore_pw)
+            #     microstrategy_xml.write(microstrategy_xml_path)
+            #
+            #     # Copy truststore into Web deployment folder
+            #
+            #     print("[-] Copying truststore to " + self.components["Web"]["path"] + "\\WEB-INF\\trusted.jks")
+            #     shutil.copyfile(self.truststore_path,
+            #                     self.components["Web"]["path"] + "\\WEB-INF\\trusted.jks")
+            #
+            #     # Ensure I-Server is added using FQDN
+            #     print(f"[-] Adding Intelligence Server to the Web Administration page using {self.fqdn} "
+            #           f"and setting port to {self.ssl_port}")
+            #     print(f"    [+] Backing up AdminServers.xml")
+            #     admin_server_xml_path = self.components["Web"]["path"] + "\\WEB-INF\\xml\\AdminServers.xml"
+            #     if self.backup_file(admin_server_xml_path):
+            #         admin_server_xml = eT.parse(admin_server_xml_path)
+            #         root = admin_server_xml.getroot()
+            #         i_server_entries = root.findall('.//server')
+            #
+            #         if i_server_entries:
+            #             entry_exists = False
+            #             for entry in i_server_entries:
+            #                 if entry.get('name').lower() == 'localhost' or entry.get(
+            #                         'name').lower() == socket.gethostname() \
+            #                         or entry.get('name') == socket.gethostbyname(socket.gethostname()):
+            #                     entry.set('name', self.fqdn)
+            #                     entry_exists = True
+            #             if not entry_exists:
+            #                 eT.SubElement(root, "server", conn="false", name=self.fqdn)
+            #                 xml.etree.ElementTree.indent(root)
+            #         else:
+            #             eT.SubElement(root, "server", conn="false", name=self.fqdn)
+            #             xml.etree.ElementTree.indent(root)
+            #         print(f"    [+] Adding Intelligence Server using {self.fqdn}")
+            #         admin_server_xml.write(admin_server_xml_path)
+            #     else:
+            #         pass
+            #
+            #     # Enable SSL for I-Server on port 39321
+            #     i_server_properties_file = self.components["Web"]["path"] + "\\WEB-INF\\xml\\sys_defaults_" + \
+            #                                self.fqdn + ".properties"
+            #     if os.path.exists(i_server_properties_file):
+            #         with open(i_server_properties_file, 'r+') as i_server_properties:
+            #             properties = i_server_properties.readlines()
+            #             if any("connectmode" in i_server_property for i_server_property in properties):
+            #                 for i in range(len(properties)):
+            #                     if properties[i].startswith("connectmode"):
+            #                         properties[i] = "connectmode=auto\n"
+            #             else:
+            #                 properties.append("connectmode=auto\n")
+            #             if any("port" in i_server_property for i_server_property in properties):
+            #                 for i in range(len(properties)):
+            #                     if properties[i].startswith("port"):
+            #                         properties[i] = f"port={self.ssl_port}\n"
+            #             else:
+            #                 properties.append(f"port={self.ssl_port}\n")
+            #             i_server_properties.truncate(0)
+            #             i_server_properties.seek(0)
+            #             for i_server_property in properties:
+            #                 i_server_properties.write(i_server_property)
+            #     else:
+            #         with open(i_server_properties_file, 'w') as i_server_properties:
+            #             i_server_properties.write(f"connmode=auto\nport={self.ssl_port}")
+            #     print(f"    [+] Setting port to {self.ssl_port}")
+            #
+            #     # Enable TLS for connection to I-Server
+            #     properties_file = self.components["Web"]["path"] + "\\WEB-INF\\xml\\sys_defaults.properties"
+            #     print("[-] Enabling TLS/SSL encryption for this MicroStrategy Web deployment.")
+            #     if os.path.exists(properties_file):
+            #         with open(properties_file, 'r+') as default_properties:
+            #             properties = default_properties.readlines()
+            #             if any("useEncryption" in default_property for default_property in properties):
+            #                 for i in range(len(properties)):
+            #                     if properties[i].startswith("useEncryption"):
+            #                         properties[i] = "useEncryption=2\n"
+            #             else:
+            #                 properties.append("useEncryption=2\n")
+            #             default_properties.truncate(0)
+            #             default_properties.seek(0)
+            #             for default_property in properties:
+            #                 default_properties.write(default_property)
+            #     else:
+            #         with open(properties_file, 'w') as default_properties:
+            #             default_properties.write("useEncryption=2\n")
+            #     print("     [+] Enabling SSL encryption.")
+            # else:
+            #     i_server_properties_file = self.components["Web"]["path"] + "\\WEB-INF\\xml\\sys_defaults_" + \
+            #                                self.fqdn + ".properties"
+            #     if os.path.exists(i_server_properties_file):
+            #         with open(i_server_properties_file, 'r+') as i_server_properties:
+            #             properties = i_server_properties.readlines()
+            #             if any("connectmode" in i_server_property for i_server_property in properties):
+            #                 for i in range(len(properties)):
+            #                     if properties[i].startswith("connectmode"):
+            #                         properties[i] = "connectmode=auto\n"
+            #             else:
+            #                 properties.append("connectmode=auto\n")
+            #             if any("port" in i_server_property for i_server_property in properties):
+            #                 for i in range(len(properties)):
+            #                     if properties[i].startswith("port"):
+            #                         properties[i] = f"port=34952\n"
+            #             else:
+            #                 properties.append(f"port=34952\n")
+            #             i_server_properties.truncate(0)
+            #             i_server_properties.seek(0)
+            #             for i_server_property in properties:
+            #                 i_server_properties.write(i_server_property)
+            #     else:
+            #         with open(i_server_properties_file, 'w') as i_server_properties:
+            #             i_server_properties.write(f"connmode=auto\nport=34952")
+            #     print(f"    [+] Setting port to 34952")
+            #
+            #     # Enable TLS for connection to I-Server
+            #     properties_file = self.components["Web"]["path"] + "\\WEB-INF\\xml\\sys_defaults.properties"
+            #     print("[-] Enabling TLS/SSL encryption for this MicroStrategy Web deployment.")
+            #     if os.path.exists(properties_file):
+            #         with open(properties_file, 'r+') as default_properties:
+            #             properties = default_properties.readlines()
+            #             if any("useEncryption" in default_property for default_property in properties):
+            #                 for i in range(len(properties)):
+            #                     if properties[i].startswith("useEncryption"):
+            #                         properties[i] = "useEncryption=0\n"
+            #             else:
+            #                 properties.append("useEncryption=0\n")
+            #             default_properties.truncate(0)
+            #             default_properties.seek(0)
+            #             for default_property in properties:
+            #                 default_properties.write(default_property)
+            #     else:
+            #         with open(properties_file, 'w') as default_properties:
+            #             default_properties.write("useEncryption=0\n")
+            #     print("     [+] Disabling SSL encryption.")
+            # print("[-] MicroStrategy Web configuration completed.\n\n")
         else:
-            print("[-] Backing up microstrategy.xml.")
-            if self.ssl_toggle:
-                microstrategy_xml = eT.parse(microstrategy_xml_path)
-                root = microstrategy_xml.getroot()
-                print("[-] Configuring trust store in microstrategy.xml")
-                print(f"    [+] Setting sslTruststore to '/WEB-INF/trusted.jks'")
-                print(f"    [+] Setting sslTruststorePwd to {self.truststore_pw}")
-                ts_path = root.find('global/parameter[@name="sslTruststore"]')
-                ts_path.set('value', "/WEB-INF/trusted.jks")
-                ts_pw = root.find('global/parameter[@name="sslTruststorePwd"]')
-                ts_pw.set('value', self.truststore_pw)
-                microstrategy_xml.write(microstrategy_xml_path)
-
-                # Copy truststore into Web deployment folder
-
-                print("[-] Copying truststore to " + self.components["Web"]["path"] + "\\WEB-INF\\trusted.jks")
-                shutil.copyfile(self.truststore_path,
-                                self.components["Web"]["path"] + "\\WEB-INF\\trusted.jks")
-
-                # Ensure I-Server is added using FQDN
-                print(f"[-] Adding Intelligence Server to the Web Administration page using {self.fqdn} "
-                      f"and setting port to {self.ssl_port}")
-                print(f"    [+] Backing up AdminServers.xml")
-                admin_server_xml_path = self.components["Web"]["path"] + "\\WEB-INF\\xml\\AdminServers.xml"
-                try:
-                    shutil.copyfile(admin_server_xml_path,
-                                    admin_server_xml_path + '_sslconfig_' + datetime.datetime.now().strftime(
-                                        '%Y%m%d_%H%M%S'))
-                except IOError:
-                    print("ERROR: Unable to locate AdminServers.xml")
-                else:
-                    admin_server_xml = eT.parse(admin_server_xml_path)
-                    root = admin_server_xml.getroot()
-                    i_server_entries = root.findall('.//server')
-
-                    if i_server_entries:
-                        entry_exists = False
-                        for entry in i_server_entries:
-                            if entry.get('name').lower() == 'localhost' or entry.get(
-                                    'name').lower() == socket.gethostname() \
-                                    or entry.get('name') == socket.gethostbyname(socket.gethostname()):
-                                entry.set('name', self.fqdn)
-                                entry_exists = True
-                        if not entry_exists:
-                            eT.SubElement(root, "server", conn="false", name=self.fqdn)
-                            xml.etree.ElementTree.indent(root)
-                    else:
-                        eT.SubElement(root, "server", conn="false", name=self.fqdn)
-                        xml.etree.ElementTree.indent(root)
-                    print(f"    [+] Adding Intelligence Server using {self.fqdn}")
-                    admin_server_xml.write(admin_server_xml_path)
-
-                # Enable SSL for I-Server on port 39321
-                i_server_properties_file = self.components["Web"]["path"] + "\\WEB-INF\\xml\\sys_defaults_" + \
-                                           self.fqdn + ".properties"
-                if os.path.exists(i_server_properties_file):
-                    with open(i_server_properties_file, 'r+') as i_server_properties:
-                        properties = i_server_properties.readlines()
-                        if any("connectmode" in i_server_property for i_server_property in properties):
-                            for i in range(len(properties)):
-                                if properties[i].startswith("connectmode"):
-                                    properties[i] = "connectmode=auto\n"
-                        else:
-                            properties.append("connectmode=auto\n")
-                        if any("port" in i_server_property for i_server_property in properties):
-                            for i in range(len(properties)):
-                                if properties[i].startswith("port"):
-                                    properties[i] = f"port={self.ssl_port}\n"
-                        else:
-                            properties.append(f"port={self.ssl_port}\n")
-                        i_server_properties.truncate(0)
-                        i_server_properties.seek(0)
-                        for i_server_property in properties:
-                            i_server_properties.write(i_server_property)
-                else:
-                    with open(i_server_properties_file, 'w') as i_server_properties:
-                        i_server_properties.write(f"connmode=auto\nport={self.ssl_port}")
-                print(f"    [+] Setting port to {self.ssl_port}")
-
-                # Enable TLS for connection to I-Server
-                properties_file = self.components["Web"]["path"] + "\\WEB-INF\\xml\\sys_defaults.properties"
-                print("[-] Enabling TLS/SSL encryption for this MicroStrategy Web deployment.")
-                if os.path.exists(properties_file):
-                    with open(properties_file, 'r+') as default_properties:
-                        properties = default_properties.readlines()
-                        if any("useEncryption" in default_property for default_property in properties):
-                            for i in range(len(properties)):
-                                if properties[i].startswith("useEncryption"):
-                                    properties[i] = "useEncryption=2\n"
-                        else:
-                            properties.append("useEncryption=2\n")
-                        default_properties.truncate(0)
-                        default_properties.seek(0)
-                        for default_property in properties:
-                            default_properties.write(default_property)
-                else:
-                    with open(properties_file, 'w') as default_properties:
-                        default_properties.write("useEncryption=2\n")
-                print("     [+] Enabling SSL encryption.")
-            else:
-                i_server_properties_file = self.components["Web"]["path"] + "\\WEB-INF\\xml\\sys_defaults_" + \
-                                           self.fqdn + ".properties"
-                if os.path.exists(i_server_properties_file):
-                    with open(i_server_properties_file, 'r+') as i_server_properties:
-                        properties = i_server_properties.readlines()
-                        if any("connectmode" in i_server_property for i_server_property in properties):
-                            for i in range(len(properties)):
-                                if properties[i].startswith("connectmode"):
-                                    properties[i] = "connectmode=auto\n"
-                        else:
-                            properties.append("connectmode=auto\n")
-                        if any("port" in i_server_property for i_server_property in properties):
-                            for i in range(len(properties)):
-                                if properties[i].startswith("port"):
-                                    properties[i] = f"port=34952\n"
-                        else:
-                            properties.append(f"port=34952\n")
-                        i_server_properties.truncate(0)
-                        i_server_properties.seek(0)
-                        for i_server_property in properties:
-                            i_server_properties.write(i_server_property)
-                else:
-                    with open(i_server_properties_file, 'w') as i_server_properties:
-                        i_server_properties.write(f"connmode=auto\nport=34952")
-                print(f"    [+] Setting port to 34952")
-
-                # Enable TLS for connection to I-Server
-                properties_file = self.components["Web"]["path"] + "\\WEB-INF\\xml\\sys_defaults.properties"
-                print("[-] Enabling TLS/SSL encryption for this MicroStrategy Web deployment.")
-                if os.path.exists(properties_file):
-                    with open(properties_file, 'r+') as default_properties:
-                        properties = default_properties.readlines()
-                        if any("useEncryption" in default_property for default_property in properties):
-                            for i in range(len(properties)):
-                                if properties[i].startswith("useEncryption"):
-                                    properties[i] = "useEncryption=0\n"
-                        else:
-                            properties.append("useEncryption=0\n")
-                        default_properties.truncate(0)
-                        default_properties.seek(0)
-                        for default_property in properties:
-                            default_properties.write(default_property)
-                else:
-                    with open(properties_file, 'w') as default_properties:
-                        default_properties.write("useEncryption=0\n")
-                print("     [+] Disabling SSL encryption.")
-            print("[-] MicroStrategy Web configuration completed.\n\n")
+            pass
 
     def configure_library(self):
         # Backup configOverride.properties
         configoverride_path = self.components["Library"][
                                   "path"] + "\\WEB-INF\\classes\\config\\configOverride.properties"
-        try:
-            shutil.copyfile(configoverride_path,
-                            configoverride_path + '_' + datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
-        except IOError:
-            print("ERROR: Can't find configOverride.properties")
-        else:
-            # update configOverride.properties with truststore
-            print("[-] Backing up configOverride.properties.")
+        if ConfigManager.backup_file(configoverride_path):
             # Enabling TLS on Library
-            if self.ssl_toggle:
-                print(f"    [+] Setting trustStore.path to {self.truststore_path}\n"
-                      f"    [+] Setting trustStore.passphrase to {self.truststore_pw}\n"
-                      f"    [+] Setting iserver.default.port to {self.ssl_port}\n"
-                      f"    [+] Setting iserver.default.hostname to {self.fqdn}\n"
-                      f"    [+] Setting iserver.tlsEnabled to true\n")
-                with open(configoverride_path, 'r+') as configoverride:
-                    properties = configoverride.readlines()
-                    if any("trustStore.path" in config_property for config_property in properties):
-                        for i in range(len(properties)):
-                            if properties[i].startswith("trustStore.path"):
-                                properties[i] = "trustStore.path=file:" + self.truststore_path.replace('\\', '/') + "\n"
-                    else:
-                        properties.append("trustStore.path=file:" + self.truststore_path.replace('\\', '/') + "\n")
+            self.update_config_file(configoverride_path, self.parameters["Library"]["configOverride.properties"])
 
-                    if any("trustStore.passphrase" in config_property for config_property in properties):
-                        for i in range(len(properties)):
-                            if properties[i].startswith("trustStore.passphrase"):
-                                properties[i] = "trustStore.passphrase=" + self.truststore_pw + "\n"
-                    else:
-                        properties.append("trustStore.passphrase=" + self.truststore_pw + "\n")
-
-                    if any("iserver.default.port" in config_property for config_property in properties):
-                        for i in range(len(properties)):
-                            if properties[i].startswith("iserver.default.port"):
-                                properties[i] = "iserver.default.port=" + str(self.ssl_port) + "\n"
-                    else:
-                        properties.append("iserver.default.port=" + str(self.ssl_port) + "\n")
-
-                    if any("iserver.default.hostname" in config_property for config_property in properties):
-                        for i in range(len(properties)):
-                            if properties[i].startswith("iserver.default.hostname"):
-                                properties[i] = "iserver.default.hostname=" + self.fqdn + "\n"
-                    else:
-                        properties.append("iserver.default.hostname=" + self.fqdn + "\n")
-
-                    if any("iserver.tlsEnabled" in config_property for config_property in properties):
-                        for i in range(len(properties)):
-                            if properties[i].startswith("iserver.tlsEnabled"):
-                                properties[i] = "iserver.tlsEnabled=true\n"
-                    else:
-                        properties.append("iserver.tlsEnabled=true\n")
-
-                    configoverride.truncate(0)
-                    configoverride.seek(0)
-                    for config_property in properties:
-                        configoverride.write(config_property)
-                    print("[-] SUCCESS: MicroStrategy Library has been configured.\n\n")
-            # Disabling TLS on Library
-            else:
-                with open(configoverride_path, 'r+') as configoverride:
-                    properties = configoverride.readlines()
-                    if any("iserver.default.port" in config_property for config_property in properties):
-                        for i in range(len(properties)):
-                            if properties[i].startswith("iserver.default.port"):
-                                properties[i] = "iserver.default.port=" + str(34952) + "\n"
-                    else:
-                        properties.append("iserver.default.port=" + str(34952) + "\n")
-
-                    if any("iserver.default.hostname" in config_property for config_property in properties):
-                        for i in range(len(properties)):
-                            if properties[i].startswith("iserver.default.hostname"):
-                                properties[i] = "iserver.default.hostname=" + self.fqdn + "\n"
-                    else:
-                        properties.append("iserver.default.hostname=" + self.fqdn + "\n")
-
-                    if any("iserver.tlsEnabled" in config_property for config_property in properties):
-                        for i in range(len(properties)):
-                            if properties[i].startswith("iserver.tlsEnabled"):
-                                properties[i] = "iserver.tlsEnabled=false\n"
-                    else:
-                        properties.append("iserver.tlsEnabled=false\n")
-                    configoverride.truncate(0)
-                    configoverride.seek(0)
-                    for config_property in properties:
-                        configoverride.write(config_property)
-                    print("[-] SUCCESS: MicroStrategy Library has been configured.\n\n")
+            # if self.ssl_toggle:
+            #     print(f"    [+] Setting trustStore.path to {self.truststore_path}\n"
+            #           f"    [+] Setting trustStore.passphrase to {self.truststore_pw}\n"
+            #           f"    [+] Setting iserver.default.port to {self.ssl_port}\n"
+            #           f"    [+] Setting iserver.default.hostname to {self.fqdn}\n"
+            #           f"    [+] Setting iserver.tlsEnabled to true\n")
+            #     with open(configoverride_path, 'r+') as configoverride:
+            #         properties = configoverride.readlines()
+            #         if any("trustStore.path" in config_property for config_property in properties):
+            #             for i in range(len(properties)):
+            #                 if properties[i].startswith("trustStore.path"):
+            #                     properties[i] = "trustStore.path=file:" + self.truststore_path.replace('\\', '/') + "\n"
+            #         else:
+            #             properties.append("trustStore.path=file:" + self.truststore_path.replace('\\', '/') + "\n")
+            #
+            #         if any("trustStore.passphrase" in config_property for config_property in properties):
+            #             for i in range(len(properties)):
+            #                 if properties[i].startswith("trustStore.passphrase"):
+            #                     properties[i] = "trustStore.passphrase=" + self.truststore_pw + "\n"
+            #         else:
+            #             properties.append("trustStore.passphrase=" + self.truststore_pw + "\n")
+            #
+            #         if any("iserver.default.port" in config_property for config_property in properties):
+            #             for i in range(len(properties)):
+            #                 if properties[i].startswith("iserver.default.port"):
+            #                     properties[i] = "iserver.default.port=" + str(self.ssl_port) + "\n"
+            #         else:
+            #             properties.append("iserver.default.port=" + str(self.ssl_port) + "\n")
+            #
+            #         if any("iserver.default.hostname" in config_property for config_property in properties):
+            #             for i in range(len(properties)):
+            #                 if properties[i].startswith("iserver.default.hostname"):
+            #                     properties[i] = "iserver.default.hostname=" + self.fqdn + "\n"
+            #         else:
+            #             properties.append("iserver.default.hostname=" + self.fqdn + "\n")
+            #
+            #         if any("iserver.tlsEnabled" in config_property for config_property in properties):
+            #             for i in range(len(properties)):
+            #                 if properties[i].startswith("iserver.tlsEnabled"):
+            #                     properties[i] = "iserver.tlsEnabled=true\n"
+            #         else:
+            #             properties.append("iserver.tlsEnabled=true\n")
+            #
+            #         configoverride.truncate(0)
+            #         configoverride.seek(0)
+            #         for config_property in properties:
+            #             configoverride.write(config_property)
+            #         print("[-] SUCCESS: MicroStrategy Library has been configured.\n\n")
+            # # Disabling TLS on Library
+            # else:
+            #     with open(configoverride_path, 'r+') as configoverride:
+            #         properties = configoverride.readlines()
+            #         if any("iserver.default.port" in config_property for config_property in properties):
+            #             for i in range(len(properties)):
+            #                 if properties[i].startswith("iserver.default.port"):
+            #                     properties[i] = "iserver.default.port=" + str(34952) + "\n"
+            #         else:
+            #             properties.append("iserver.default.port=" + str(34952) + "\n")
+            #
+            #         if any("iserver.default.hostname" in config_property for config_property in properties):
+            #             for i in range(len(properties)):
+            #                 if properties[i].startswith("iserver.default.hostname"):
+            #                     properties[i] = "iserver.default.hostname=" + self.fqdn + "\n"
+            #         else:
+            #             properties.append("iserver.default.hostname=" + self.fqdn + "\n")
+            #
+            #         if any("iserver.tlsEnabled" in config_property for config_property in properties):
+            #             for i in range(len(properties)):
+            #                 if properties[i].startswith("iserver.tlsEnabled"):
+            #                     properties[i] = "iserver.tlsEnabled=false\n"
+            #         else:
+            #             properties.append("iserver.tlsEnabled=false\n")
+            #         configoverride.truncate(0)
+            #         configoverride.seek(0)
+            #         for config_property in properties:
+            #             configoverride.write(config_property)
+            #         print("[-] SUCCESS: MicroStrategy Library has been configured.\n\n")
+        else:
+            pass
 
     def configure_modeling(self):
         # Backup application.conf
         application_conf_path = self.components["Modeling Service"][
                                   "path"] + "\\admin\\application.conf"
-        try:
-            shutil.copyfile(application_conf_path,
-                            application_conf_path + '_' + datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
-        except IOError:
-            print("ERROR: Can't find application.conf")
+        if self.backup_file(application_conf_path):
+            self.update_config_file(application_conf_path, self.parameters["Modeling Service"]["application.conf"])
         else:
-            # update application.conf with truststore
-            print("[-] Backing up application.conf.")
-            # Enabling TLS on Modeling Service
-            if self.ssl_toggle:
-                print(f"    [+] Enabling https.port on 10443\n"
-                      f"    [+] Setting play.server.https.keyStore.path to {self.keystore_path}\n"
-                      f"    [+] Setting play.server.https.keyStore.type to JKS\n"
-                      f"    [+] Setting play.server.https.keyStore.password to {self.keystore_pw}\n")
-                with open(application_conf_path, 'r+') as application_conf:
-                    properties = application_conf.readlines()
-                    if any("https.port" in config_property for config_property in properties):
-                        for i in range(len(properties)):
-                            if "https.port" in properties[i]:
-                                properties[i] = "https.port = 10443\n"
-                    else:
-                        properties.append("https.port = 10443\n")
+            pass
+            # # update application.conf with truststore
+            # print("[-] Backing up application.conf.")
+            # # Enabling TLS on Modeling Service
+            # if self.ssl_toggle:
+            #     print(f"    [+] Enabling https.port on 10443\n"
+            #           f"    [+] Setting play.server.https.keyStore.path to {self.keystore_path}\n"
+            #           f"    [+] Setting play.server.https.keyStore.type to JKS\n"
+            #           f"    [+] Setting play.server.https.keyStore.password to {self.keystore_pw}\n")
+            #     with open(application_conf_path, 'r+') as application_conf:
+            #         properties = application_conf.readlines()
+            #         if any("https.port" in config_property for config_property in properties):
+            #             for i in range(len(properties)):
+            #                 if "https.port" in properties[i]:
+            #                     properties[i] = "https.port = 10443\n"
+            #         else:
+            #             properties.append("https.port = 10443\n")
+            #
+            #         if any("play.server.https.keyStore.path" in config_property for config_property in properties):
+            #             for i in range(len(properties)):
+            #                 if "play.server.https.keyStore.path" in properties[i]:
+            #                     properties[i] = 'play.server.https.keyStore.path = "' + self.keystore_path.replace('\\', '/') + '"\n'
+            #         else:
+            #             properties.append('play.server.https.keyStore.path = "' + self.keystore_path.replace('\\', '/') + '"\n')
+            #
+            #         if any("play.server.https.keyStore.type" in config_property for config_property in properties):
+            #             for i in range(len(properties)):
+            #                 if "play.server.https.keyStore.type" in properties[i]:
+            #                     properties[i] = "play.server.https.keyStore.type = JKS\n"
+            #         else:
+            #             properties.append("play.server.https.keyStore.type = JKS\n")
+            #
+            #         if any("play.server.https.keyStore.password" in config_property for config_property in properties):
+            #             for i in range(len(properties)):
+            #                 if "play.server.https.keyStore.password" in properties[i]:
+            #                     properties[i] = 'play.server.https.keyStore.password = "' + self.keystore_pw + '"\n'
+            #         else:
+            #             properties.append('play.server.https.keyStore.password = "' + self.keystore_pw + '"\n')
+            #
+            #         application_conf.truncate(0)
+            #         application_conf.seek(0)
+            #         for config_property in properties:
+            #             application_conf.write(config_property)
+            #
+            #         print("[-] SUCCESS: MicroStrategy Modeling Service application.conf has been configured for TLS access on port 10443.\n\n")
 
-                    if any("play.server.https.keyStore.path" in config_property for config_property in properties):
-                        for i in range(len(properties)):
-                            if "play.server.https.keyStore.path" in properties[i]:
-                                properties[i] = 'play.server.https.keyStore.path = "' + self.keystore_path.replace('\\', '/') + '"\n'
-                    else:
-                        properties.append('play.server.https.keyStore.path = "' + self.keystore_path.replace('\\', '/') + '"\n')
-
-                    if any("play.server.https.keyStore.type" in config_property for config_property in properties):
-                        for i in range(len(properties)):
-                            if "play.server.https.keyStore.type" in properties[i]:
-                                properties[i] = "play.server.https.keyStore.type = JKS\n"
-                    else:
-                        properties.append("play.server.https.keyStore.type = JKS\n")
-
-                    if any("play.server.https.keyStore.password" in config_property for config_property in properties):
-                        for i in range(len(properties)):
-                            if "play.server.https.keyStore.password" in properties[i]:
-                                properties[i] = 'play.server.https.keyStore.password = "' + self.keystore_pw + '"\n'
-                    else:
-                        properties.append('play.server.https.keyStore.password = "' + self.keystore_pw + '"\n')
-
-                    application_conf.truncate(0)
-                    application_conf.seek(0)
-                    for config_property in properties:
-                        application_conf.write(config_property)
-
-                    print("[-] SUCCESS: MicroStrategy Modeling Service application.conf has been configured for TLS access on port 10443.\n\n")
-
-            # Disabling TLS on Modeling Service
-            else:
-                with open(application_conf_path, 'r+') as application_conf:
-                    properties = application_conf.readlines()
-                    if any("https.port" in config_property for config_property in properties):
-                        for i in range(len(properties)):
-                            if "https.port" in properties[i]:
-                                properties[i] = "# https.port = 10443\n"
-                    else:
-                        properties.append("# https.port = 10443\n")
-
-                    if any("play.server.https.keyStore.path" in config_property for config_property in properties):
-                        for i in range(len(properties)):
-                            if "play.server.https.keyStore.path" in properties[i]:
-                                properties[i] = '# play.server.https.keyStore.path = "' + self.keystore_path.replace('\\',
-                                                                                                                   '/') + '"\n'
-                    else:
-                        properties.append(
-                            '# play.server.https.keyStore.path = "' + self.keystore_path.replace('\\', '/') + '"\n')
-
-                    if any("play.server.https.keyStore.type" in config_property for config_property in properties):
-                        for i in range(len(properties)):
-                            if "play.server.https.keyStore.type" in properties[i]:
-                                properties[i] = "# play.server.https.keyStore.type = JKS\n"
-                    else:
-                        properties.append("# play.server.https.keyStore.type = JKS\n")
-
-                    if any("play.server.https.keyStore.password" in config_property for config_property in properties):
-                        for i in range(len(properties)):
-                            if "play.server.https.keyStore.password" in properties[i]:
-                                properties[i] = '# play.server.https.keyStore.password = "' + self.keystore_pw + '"\n'
-                    else:
-                        properties.append('# play.server.https.keyStore.password = "' + self.keystore_pw + '"\n')
-
-                    application_conf.truncate(0)
-                    application_conf.seek(0)
-                    for config_property in properties:
-                        application_conf.write(config_property)
-                    print("[-] SUCCESS: MicroStrategy Modeling Service application.conf has been configured without TLS.\n\n")
+            # # Disabling TLS on Modeling Service
+            # else:
+            #     with open(application_conf_path, 'r+') as application_conf:
+            #         properties = application_conf.readlines()
+            #         if any("https.port" in config_property for config_property in properties):
+            #             for i in range(len(properties)):
+            #                 if "https.port" in properties[i]:
+            #                     properties[i] = "# https.port = 10443\n"
+            #         else:
+            #             properties.append("# https.port = 10443\n")
+            #
+            #         if any("play.server.https.keyStore.path" in config_property for config_property in properties):
+            #             for i in range(len(properties)):
+            #                 if "play.server.https.keyStore.path" in properties[i]:
+            #                     properties[i] = '# play.server.https.keyStore.path = "' + self.keystore_path.replace('\\',
+            #                                                                                                        '/') + '"\n'
+            #         else:
+            #             properties.append(
+            #                 '# play.server.https.keyStore.path = "' + self.keystore_path.replace('\\', '/') + '"\n')
+            #
+            #         if any("play.server.https.keyStore.type" in config_property for config_property in properties):
+            #             for i in range(len(properties)):
+            #                 if "play.server.https.keyStore.type" in properties[i]:
+            #                     properties[i] = "# play.server.https.keyStore.type = JKS\n"
+            #         else:
+            #             properties.append("# play.server.https.keyStore.type = JKS\n")
+            #
+            #         if any("play.server.https.keyStore.password" in config_property for config_property in properties):
+            #             for i in range(len(properties)):
+            #                 if "play.server.https.keyStore.password" in properties[i]:
+            #                     properties[i] = '# play.server.https.keyStore.password = "' + self.keystore_pw + '"\n'
+            #         else:
+            #             properties.append('# play.server.https.keyStore.password = "' + self.keystore_pw + '"\n')
+            #
+            #         application_conf.truncate(0)
+            #         application_conf.seek(0)
+            #         for config_property in properties:
+            #             application_conf.write(config_property)
+            #         print("[-] SUCCESS: MicroStrategy Modeling Service application.conf has been configured without TLS.\n\n")
 
         # Backup modelservice.conf
         modelservice_conf_path = self.components["Modeling Service"][
                                     "path"] + "\\admin\\modelservice.conf"
-        try:
-            shutil.copyfile(modelservice_conf_path,
-                            modelservice_conf_path + '_' + datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
-        except IOError:
-            print("ERROR: Can't find modelservice.conf")
+        if self.backup_file(modelservice_conf_path):
+            self.update_config_file(modelservice_conf_path, self.parameters["Modeling Service"]["modelservice.conf"])
         else:
-            # update modelservice.conf with truststore
-            print("[-] Backing up modelservice.conf.")
-            # Enabling TLS on Modeling Service modelservice.conf
-            if self.ssl_toggle:
-                print(f"    [+] Setting modelservice.iserver.tlsEnabled to true\n"
-                      f"    [+] Setting modelservice.trustStore.path to {self.truststore_path}\n"
-                      f"    [+] Setting modelservice.trustStore.passphrase to {self.truststore_pw}\n")
-                with open(modelservice_conf_path, 'r+') as modelservice_conf:
-                    properties = modelservice_conf.readlines()
-                    if any("modelservice.iserver.tlsEnabled" in config_property for config_property in properties):
-                        for i in range(len(properties)):
-                            if "modelservice.iserver.tlsEnabled" in properties[i]:
-                                properties[i] = "modelservice.iserver.tlsEnabled = true\n"
-                    else:
-                        properties.append("modelservice.iserver.tlsEnabled = true\n")
-
-                    if any("modelservice.trustStore.path" in config_property for config_property in properties):
-                        for i in range(len(properties)):
-                            if "modelservice.trustStore.path" in properties[i]:
-                                properties[i] = 'modelservice.trustStore.path = ' + self.truststore_path.replace(
-                                    '\\', '/') + '\n'
-                    else:
-                        properties.append(
-                            'modelservice.trustStore.path = ' + self.truststore_path.replace('\\', '/') + '\n')
-
-                    if any("modelservice.trustStore.passphrase" in config_property for config_property in properties):
-                        for i in range(len(properties)):
-                            if "modelservice.trustStore.passphrase" in properties[i]:
-                                properties[i] = f"modelservice.trustStore.passphrase = {self.truststore_pw}\n"
-                    else:
-                        properties.append(f"modelservice.trustStore.passphrase = {self.truststore_pw}\n")
-
-                    modelservice_conf.truncate(0)
-                    modelservice_conf.seek(0)
-                    for config_property in properties:
-                        modelservice_conf.write(config_property)
-
-                    print(
-                        "[-] SUCCESS: MicroStrategy Modeling Service modelservice.conf has been configured.\n\n")
-
-            # Disabling TLS on Modeling Service modelservice.conf
-            else:
-                with open(modelservice_conf_path, 'r+') as modelservice_conf:
-                    properties = modelservice_conf.readlines()
-                    if any("modelservice.iserver.tlsEnabled" in config_property for config_property in properties):
-                        for i in range(len(properties)):
-                            if "modelservice.iserver.tlsEnabled" in properties[i]:
-                                properties[i] = "modelservice.iserver.tlsEnabled = false\n"
-                    else:
-                        properties.append("modelservice.iserver.tlsEnabled = false\n")
-
-                    if any("modelservice.trustStore.path" in config_property for config_property in properties):
-                        for i in range(len(properties)):
-                            if "modelservice.trustStore.path" in properties[i]:
-                                properties[i] = '# modelservice.trustStore.path = "' + self.truststore_path.replace(
-                                    '\\', '/') + '"\n'
-                    else:
-                        properties.append(
-                            '# modelservice.trustStore.path = "' + self.truststore_path.replace('\\', '/') + '"\n')
-
-                    if any("modelservice.trustStore.passphrase" in config_property for config_property in properties):
-                        for i in range(len(properties)):
-                            if "modelservice.trustStore.passphrase" in properties[i]:
-                                properties[i] = f"# modelservice.trustStore.passphrase = {self.truststore_pw}\n"
-                    else:
-                        properties.append(f"# modelservice.trustStore.passphrase = {self.truststore_pw}\n")
-
-                    modelservice_conf.truncate(0)
-                    modelservice_conf.seek(0)
-                    for config_property in properties:
-                        modelservice_conf.write(config_property)
-
-                    print(
-                        "[-] SUCCESS: MicroStrategy Modeling Service modelservice.conf has been configured.\n\n")
+            pass
+            # # update modelservice.conf with truststore
+            # print("[-] Backing up modelservice.conf.")
+            # # Enabling TLS on Modeling Service modelservice.conf
+            # if self.ssl_toggle:
+            #     print(f"    [+] Setting modelservice.iserver.tlsEnabled to true\n"
+            #           f"    [+] Setting modelservice.trustStore.path to {self.truststore_path}\n"
+            #           f"    [+] Setting modelservice.trustStore.passphrase to {self.truststore_pw}\n")
+            #     with open(modelservice_conf_path, 'r+') as modelservice_conf:
+            #         properties = modelservice_conf.readlines()
+            #         if any("modelservice.iserver.tlsEnabled" in config_property for config_property in properties):
+            #             for i in range(len(properties)):
+            #                 if "modelservice.iserver.tlsEnabled" in properties[i]:
+            #                     properties[i] = "modelservice.iserver.tlsEnabled = true\n"
+            #         else:
+            #             properties.append("modelservice.iserver.tlsEnabled = true\n")
+            #
+            #         if any("modelservice.trustStore.path" in config_property for config_property in properties):
+            #             for i in range(len(properties)):
+            #                 if "modelservice.trustStore.path" in properties[i]:
+            #                     properties[i] = 'modelservice.trustStore.path = ' + self.truststore_path.replace(
+            #                         '\\', '/') + '\n'
+            #         else:
+            #             properties.append(
+            #                 'modelservice.trustStore.path = ' + self.truststore_path.replace('\\', '/') + '\n')
+            #
+            #         if any("modelservice.trustStore.passphrase" in config_property for config_property in properties):
+            #             for i in range(len(properties)):
+            #                 if "modelservice.trustStore.passphrase" in properties[i]:
+            #                     properties[i] = f"modelservice.trustStore.passphrase = {self.truststore_pw}\n"
+            #         else:
+            #             properties.append(f"modelservice.trustStore.passphrase = {self.truststore_pw}\n")
+            #
+            #         modelservice_conf.truncate(0)
+            #         modelservice_conf.seek(0)
+            #         for config_property in properties:
+            #             modelservice_conf.write(config_property)
+            #
+            #         print(
+            #             "[-] SUCCESS: MicroStrategy Modeling Service modelservice.conf has been configured.\n\n")
+            #
+            # # Disabling TLS on Modeling Service modelservice.conf
+            # else:
+            #     with open(modelservice_conf_path, 'r+') as modelservice_conf:
+            #         properties = modelservice_conf.readlines()
+            #         if any("modelservice.iserver.tlsEnabled" in config_property for config_property in properties):
+            #             for i in range(len(properties)):
+            #                 if "modelservice.iserver.tlsEnabled" in properties[i]:
+            #                     properties[i] = "modelservice.iserver.tlsEnabled = false\n"
+            #         else:
+            #             properties.append("modelservice.iserver.tlsEnabled = false\n")
+            #
+            #         if any("modelservice.trustStore.path" in config_property for config_property in properties):
+            #             for i in range(len(properties)):
+            #                 if "modelservice.trustStore.path" in properties[i]:
+            #                     properties[i] = '# modelservice.trustStore.path = "' + self.truststore_path.replace(
+            #                         '\\', '/') + '"\n'
+            #         else:
+            #             properties.append(
+            #                 '# modelservice.trustStore.path = "' + self.truststore_path.replace('\\', '/') + '"\n')
+            #
+            #         if any("modelservice.trustStore.passphrase" in config_property for config_property in properties):
+            #             for i in range(len(properties)):
+            #                 if "modelservice.trustStore.passphrase" in properties[i]:
+            #                     properties[i] = f"# modelservice.trustStore.passphrase = {self.truststore_pw}\n"
+            #         else:
+            #             properties.append(f"# modelservice.trustStore.passphrase = {self.truststore_pw}\n")
+            #
+            #         modelservice_conf.truncate(0)
+            #         modelservice_conf.seek(0)
+            #         for config_property in properties:
+            #             modelservice_conf.write(config_property)
+            #
+            #         print(
+            #             "[-] SUCCESS: MicroStrategy Modeling Service modelservice.conf has been configured.\n\n")
 
         # Setup Library for Modeling Service using TLS
         configoverride_path = self.components["Library"][
                                   "path"] + "\\WEB-INF\\classes\\config\\configOverride.properties"
-        if self.ssl_toggle:
-            print(f"    [+] Setting services.MicroStrategy-Modeling-Service.tlsEnabled to true\n"
-                  f"    [+] Setting services.MicroStrategy-Modeling-Service.baseURL to https://{self.fqdn.lower()}:10443\n")
-            with open(configoverride_path, 'r+') as configoverride:
-                properties = configoverride.readlines()
-                if any("services.MicroStrategy-Modeling-Service.tlsEnabled" in config_property for config_property in properties):
-                    for i in range(len(properties)):
-                        if properties[i].startswith("services.MicroStrategy-Modeling-Service.tlsEnabled"):
-                            properties[i] = "services.MicroStrategy-Modeling-Service.tlsEnabled = true\n"
-                else:
-                    properties.append("services.MicroStrategy-Modeling-Service.tlsEnabled = true\n")
-
-                if any("services.MicroStrategy-Modeling-Service.baseURL" in config_property for config_property in properties):
-                    for i in range(len(properties)):
-                        if properties[i].startswith("services.MicroStrategy-Modeling-Service.baseURL"):
-                            properties[i] = f"services.MicroStrategy-Modeling-Service.baseURL = https://{self.fqdn.lower()}:10443\n"
-                else:
-                    properties.append(f"services.MicroStrategy-Modeling-Service.baseURL = https://{self.fqdn.lower()}:10443\n")
-
-                configoverride.truncate(0)
-                configoverride.seek(0)
-                for config_property in properties:
-                    configoverride.write(config_property)
-                print("[-] SUCCESS: MicroStrategy Library has been configured.\n\n")
-        # Disabling TLS for Modeling Service on Library
-        else:
-            with open(configoverride_path, 'r+') as configoverride:
-                properties = configoverride.readlines()
-                if any("services.MicroStrategy-Modeling-Service.tlsEnabled" in config_property for config_property in
-                       properties):
-                    for i in range(len(properties)):
-                        if properties[i].startswith("services.MicroStrategy-Modeling-Service.tlsEnabled"):
-                            properties[i] = "services.MicroStrategy-Modeling-Service.tlsEnabled = false\n"
-                else:
-                    properties.append("services.MicroStrategy-Modeling-Service.tlsEnabled = false\n")
-
-                if any("services.MicroStrategy-Modeling-Service.baseURL" in config_property for config_property in
-                       properties):
-                    for i in range(len(properties)):
-                        if properties[i].startswith("services.MicroStrategy-Modeling-Service.baseURL"):
-                            properties[
-                                i] = f"services.MicroStrategy-Modeling-Service.baseURL = \n"
-                else:
-                    properties.append(
-                        f"services.MicroStrategy-Modeling-Service.baseURL = \n")
-
-                configoverride.truncate(0)
-                configoverride.seek(0)
-                for config_property in properties:
-                    configoverride.write(config_property)
-                print("[-] SUCCESS: MicroStrategy Library has been configured.\n\n")
+        self.update_config_file(configoverride_path, self.parameters["Modeling Service"]["configOverride.properties"])
+        # if self.ssl_toggle:
+        #     print(f"    [+] Setting services.MicroStrategy-Modeling-Service.tlsEnabled to true\n"
+        #           f"    [+] Setting services.MicroStrategy-Modeling-Service.baseURL to https://{self.fqdn.lower()}:10443\n")
+        #     with open(configoverride_path, 'r+') as configoverride:
+        #         properties = configoverride.readlines()
+        #         if any("services.MicroStrategy-Modeling-Service.tlsEnabled" in config_property for config_property in properties):
+        #             for i in range(len(properties)):
+        #                 if properties[i].startswith("services.MicroStrategy-Modeling-Service.tlsEnabled"):
+        #                     properties[i] = "services.MicroStrategy-Modeling-Service.tlsEnabled = true\n"
+        #         else:
+        #             properties.append("services.MicroStrategy-Modeling-Service.tlsEnabled = true\n")
+        #
+        #         if any("services.MicroStrategy-Modeling-Service.baseURL" in config_property for config_property in properties):
+        #             for i in range(len(properties)):
+        #                 if properties[i].startswith("services.MicroStrategy-Modeling-Service.baseURL"):
+        #                     properties[i] = f"services.MicroStrategy-Modeling-Service.baseURL = https://{self.fqdn.lower()}:10443\n"
+        #         else:
+        #             properties.append(f"services.MicroStrategy-Modeling-Service.baseURL = https://{self.fqdn.lower()}:10443\n")
+        #
+        #         configoverride.truncate(0)
+        #         configoverride.seek(0)
+        #         for config_property in properties:
+        #             configoverride.write(config_property)
+        #         print("[-] SUCCESS: MicroStrategy Library has been configured.\n\n")
+        # # Disabling TLS for Modeling Service on Library
+        # else:
+        #     with open(configoverride_path, 'r+') as configoverride:
+        #         properties = configoverride.readlines()
+        #         if any("services.MicroStrategy-Modeling-Service.tlsEnabled" in config_property for config_property in
+        #                properties):
+        #             for i in range(len(properties)):
+        #                 if properties[i].startswith("services.MicroStrategy-Modeling-Service.tlsEnabled"):
+        #                     properties[i] = "services.MicroStrategy-Modeling-Service.tlsEnabled = false\n"
+        #         else:
+        #             properties.append("services.MicroStrategy-Modeling-Service.tlsEnabled = false\n")
+        #
+        #         if any("services.MicroStrategy-Modeling-Service.baseURL" in config_property for config_property in
+        #                properties):
+        #             for i in range(len(properties)):
+        #                 if properties[i].startswith("services.MicroStrategy-Modeling-Service.baseURL"):
+        #                     properties[
+        #                         i] = f"services.MicroStrategy-Modeling-Service.baseURL = \n"
+        #         else:
+        #             properties.append(
+        #                 f"services.MicroStrategy-Modeling-Service.baseURL = \n")
+        #
+        #         configoverride.truncate(0)
+        #         configoverride.seek(0)
+        #         for config_property in properties:
+        #             configoverride.write(config_property)
+        #         print("[-] SUCCESS: MicroStrategy Library has been configured.\n\n")
 
     def restart_modeling(self):
         if os.system('sc query "MSTR_ModelingService" | find "RUNNING" >nul') == 0:
@@ -773,3 +769,81 @@ class ConfigManager:
                   f"on this machine, install {self.root_certificate} with right-click > Install Certificate.")
         finally:
             store.CertCloseStore(CERT_CLOSE_STORE_FORCE_FLAG)
+
+    @staticmethod
+    def backup_file(filepath):
+        try:
+            shutil.copyfile(filepath,
+                            filepath + '_sslconfig_backup_' + datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
+        except IOError:
+            print(f"ERROR: Unable to locate {filepath}")
+            return False
+        else:
+            print(f'[-] Backing up {filepath}')
+            return True
+
+    def update_config_file(self, filepath, property_values):
+
+        # If file path points to .properties or .conf file
+        if filepath.endswith('.properties') or filepath.endswith('.conf'):
+            if os.path.exists(filepath):
+                with open(filepath, 'r+') as file:
+                    lines = file.readlines()
+                    for key, value in property_values.items():
+                        print(f"    [+] Setting {key} to {value}")
+                        if any(key in default_property for default_property in lines):
+                            for i in range(len(lines)):
+                                if lines[i].startswith(key):
+                                    lines[i] = f"{key}={value}\n"
+                        else:
+                            lines.append(f"{key}={value}\n")
+                        file.truncate(0)
+                        file.seek(0)
+                        for default_property in lines:
+                            file.write(default_property)
+            else:
+                with open(filepath, 'w') as file:
+                    for key, value in property_values.items():
+                        print(f"    [+] Setting {key} to {value}")
+                        file.write(f"{key}={value}\n")
+
+        # if file is an .xml file
+        elif filepath.endswith('.xml'):
+            file = eT.parse(filepath)
+            root = file.getroot()
+            for key, value in property_values.items():
+                xml_tag = root.find(key)
+                if xml_tag is not None:
+                    for sub_key, sub_value in value.items():
+                        print(f"    [+] Setting {sub_key} to {sub_value}")
+                        xml_tag.set(sub_key, sub_value)
+                else:
+                    if '/' in key:
+                        path = key.rpartition('/')[0]
+                        parent = root.find(path)
+                        tag = key.rpartition('/')[2].rpartition('[')[0]
+                    else:
+                        parent = root
+                        tag = key.rpartition('[')[0]
+                    eT.SubElement(parent, tag, value)
+
+            xml.etree.ElementTree.indent(root)
+            file.write(filepath)
+
+        # If file is a .json file
+        elif filepath.endswith('.json'):
+            with open(filepath, 'r+') as file:
+                data = json.load(file)
+                for key, value in property_values.items():
+                    if value != "":
+                        print(f"    [+] Setting {key} to {value}")
+                        data[key] = value
+                    else:
+                        print(f"    [+] Removing {key}")
+                        del data[key]
+                file.truncate(0)
+                file.seek(0)
+                file.write(json.dumps(data, indent=3))
+
+    def update_registry(self):
+        pass
