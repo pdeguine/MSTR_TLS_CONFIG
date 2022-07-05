@@ -244,9 +244,9 @@ configManager.apply()
 configManager.copy_truststore(f"{PATH_EXE}\\{TRUSTSTORE}", config["Web"]["path"] + "\\WEB-INF\\" + TRUSTSTORE)
 configManager.restart()
 
-print("\n[-] Installing root certificate into Windows Certificate Store.\n")
+print("\n>> Installing root certificate into Windows Certificate Store.\n")
 configManager.install_ca_cert(f"{PATH_EXE}\\{ROOT_CERTIFICATE}")
-print("[-] Configuration complete.\n\n")
+print(">> Configuration complete.\n\n")
 print("----------------------------------------------------\n")
 print("Please read:\n")
 print(f"[-] Use the fully qualified domain name ({configManager.fqdn.lower()}) to connect to Tomcat.\n"
