@@ -3,6 +3,7 @@ import ctypes
 import configManager
 import socket
 import sys
+import subprocess
 
 PATH_EXE = "c:\\ssl"
 # PATH_EXE = os.path.dirname(sys.executable)
@@ -19,10 +20,14 @@ TRUSTSTORE_PEM = "MSTRTSRootCA.pem"
 ROOT_CERTIFICATE = "MSTRTSRootCA.crt"
 I_SERVER_PFX = "iserver.pfx"
 SSL_PORT = 39321
+NO_SSL_PORT = 34952
 FQDN = socket.getfqdn().upper()
+VERSION = "1.1"
+REST_PORT = 34962
 
 
 def build_config(ssl_toggle):
+    # Verify all ssl artifacts are available on their physical location
     if ssl_toggle:
         required_ssl_artifacts = [f"{PATH_EXE}\\{KEYSTORE}",
                                   f"{PATH_EXE}\\{CERTIFICATE}",
@@ -39,110 +44,179 @@ def build_config(ssl_toggle):
                 input("Press ENTER to exit.")
                 exit()
 
-        config = {
-            "keystore_pw": KEYSTORE_PW,
-            "keystore_path": f"{PATH_EXE}\\{KEYSTORE}",
-            "certificate_path": f"{PATH_EXE}\\{CERTIFICATE}",
-            "key_path": f"{PATH_EXE}\\{KEY}",
-            "key_password": KEY_PASSWORD,
-            "truststore_path": f"{PATH_EXE}\\{TRUSTSTORE}",
-            "truststore_pw": TRUSTSTORE_PW,
-            "truststore_pem": f"{PATH_EXE}\\{TRUSTSTORE_PEM}",
-            "root_certificate": f"{PATH_EXE}\\{ROOT_CERTIFICATE}",
-            "i_server_pfx": f"{PATH_EXE}\\{I_SERVER_PFX}",
-            "ssl_port": SSL_PORT
+    config = {
+        "Intelligence Server": {
+            "installed": False,
+            "path": "",
+            "service_name": "MicroStrategy Intelligence Server",
+            "parameters": {
+                "registry_config": {
+                    "registry_key": r'SOFTWARE\WOW6432Node\MicroStrategy\Data Sources\CastorServer',
+                    "registry_parameters": {
+                        "CertificatePath": f"{PATH_EXE}\\{CERTIFICATE}",
+                        "KeyPath": f"{PATH_EXE}\\{KEY}",
+                        "CertificateKeyPassword": KEY_PASSWORD,
+                        "SSLPort": SSL_PORT if ssl_toggle else 4294967295
+                    }
+                },
+                "rest_api_config": {
+                    "i_server_pfx": str(PATH_EXE + '/' + KEYSTORE).replace('/', '\\') if ssl_toggle else "",
+                    "i_server_pfx_pw": KEYSTORE_PW,
+                    "CertificatePath": f"{PATH_EXE}\\{CERTIFICATE}",
+                    "REST_PORT": 34962
+                }
+            }
+
+        },
+        "Tomcat": {
+            "installed": False,
+            "path": get_tomcat_home() + "\\conf",
+            "service_name": "tomcat9",
+            "parameters": {
+                "\\server.xml": {
+                    'Service/Connector[@port="8443"]': {
+                        'keystoreFile': str(PATH_EXE + '/' + KEYSTORE).replace('/', '\\') if ssl_toggle else "",
+                        'keystorePass': KEYSTORE_PW if ssl_toggle else ""
+                    }
+                }
+            }
+        },
+        "Web": {
+            "installed": False,
+            "path": get_tomcat_home() + "\\webapps\\MicroStrategy",
+            "service_name": None,
+            "parameters": {
+                "\\WEB-INF\\xml\\adminServers.xml": {
+                    f'server[@name="{FQDN}"]': {
+                        "name": FQDN,
+                        "conn": "false"
+                    }
+
+                },
+                "\\WEB-INF\\microstrategy.xml": {
+                    'global/parameter[@name="sslTruststore"]': {
+                        "value": str("WEB-INF" + '/' + TRUSTSTORE).replace('\\', '/')
+                    },
+                    'global/parameter[@name="sslTruststorePwd"]': {
+                        "value": TRUSTSTORE_PW
+                    }
+                },
+                "\\WEB-INF\\xml\\sys_defaults.properties": {
+                    "useEncryption": "2" if ssl_toggle else "0"
+                },
+                f"\\WEB-INF\\xml\\sys_defaults_{FQDN}.properties": {
+                    "connectmode": "auto"
+                }
+            }
+        },
+        "Library": {
+            "installed": False,
+            "path": get_tomcat_home() + "\\webapps\\MicroStrategyLibrary",
+            "service_name": None,
+            "parameters": {
+                "\\WEB-INF\\classes\\config\\configOverride.properties":
+                    {
+                        "trustStore.path": "file:" + str(PATH_EXE + '/' + TRUSTSTORE).replace('\\',
+                                                                                              '/') if ssl_toggle else "",
+                        "trustStore.passphrase": TRUSTSTORE_PW if ssl_toggle else "",
+                        "iserver.default.hostname": FQDN,
+                        "iserver.default.port": SSL_PORT if ssl_toggle else NO_SSL_PORT,
+                        "iserver.tlsEnabled": "true" if ssl_toggle else "false"
+                    }
+            }
+        },
+        "Collaboration Server": {
+            "installed": False,
+            "path": "C:\\Program Files (x86)\\MicroStrategy\\Collaboration Server",
+            "service_name": "MSTR_collaboration",
+            "parameters": {
+                "\\config.json": {
+                    "enableTls": "true" if ssl_toggle else "false",
+                    "keystoreFile": str(PATH_EXE + '/' + KEYSTORE).replace('\\', '/') if ssl_toggle else "",
+                    "passphrase": KEYSTORE_PW if ssl_toggle else "",
+                    "trustedCerts": [str(PATH_EXE + '/' + TRUSTSTORE_PEM).replace('\\', '/')] if ssl_toggle else [],
+                    "authorizationServerUrl": f"https://{FQDN.lower()}:8443/MicroStrategyLibrary/api"
+                }
+            }
+        },
+        "Modeling Service": {
+            "installed": False,
+            "path": "C:\\Program Files (x86)\\MicroStrategy\\ModelingService\\admin",
+            "service_name": "MSTR_ModelingService",
+            "parameters": {
+                "\\application.conf": {
+                    "https.port": "10443" if ssl_toggle else "",
+                    "play.server.https.keyStore.path": '"' + PATH_EXE.replace("\\",
+                                                                              "/") + '/' + KEYSTORE + '"' if ssl_toggle else "",
+                    "play.server.https.keyStore.type": "JKS" if ssl_toggle else "",
+                    "play.server.https.keyStore.password": '"' + KEYSTORE_PW + '"' if ssl_toggle else ""
+                },
+                "\\modelservice.conf": {
+                    "modelservice.iserver.tlsEnabled": "true" if ssl_toggle else "false",
+                    "modelservice.trustStore.path": str(PATH_EXE + '/' + TRUSTSTORE).replace('\\',
+                                                                                             '/') if ssl_toggle else "",
+                    "modelservice.trustStore.passphrase": TRUSTSTORE_PW if ssl_toggle else ""
+                },
+                "\\WEB-INF\\classes\\config\\configOverride.properties": {
+                    "services.MicroStrategy-Modeling-Service.tlsEnabled": "true" if ssl_toggle else "false",
+                    "services.MicroStrategy-Modeling-Service.baseURL": f"https://{FQDN.lower()}:10443" if ssl_toggle else ""
+                }
+            }
         }
-    else:
-        config = {
-            "keystore_pw": "",
-            "keystore_path": "",
-            "certificate_path": "",
-            "key_path": "",
-            "key_password": "",
-            "truststore_path": "",
-            "truststore_pw": "",
-            "truststore_pem": "",
-            "root_certificate": "",
-            "i_server_pfx": "",
-            "ssl_port": 4294967295
-        }
+    }
+
+    # Check which of the above components are installed.
+    for component, value in config.items():
+        if config[component]["service_name"]:
+            try:
+                subprocess.check_output('sc qc "' + config[component]["service_name"] + '"')
+            except subprocess.CalledProcessError:
+                config[component]["installed"] = False
+            else:
+                config[component]["installed"] = True
+        else:
+            if os.path.exists(config[component]["path"]):
+                config[component]["installed"] = True
+            else:
+                config[component]["installed"] = False
+
+    for component, value in list(config.items()):
+        if component == "Modeling Service":
+            for parameter, value in list(config[component]["parameters"].items()):
+                if parameter == "\\WEB-INF\\classes\\config\\configOverride.properties":
+                    config[component]["parameters"][config["Library"]["path"] + parameter] = value
+                    del config[component]["parameters"][parameter]
+                else:
+                    config[component]["parameters"][config[component]["path"] + parameter] = value
+                    del config[component]["parameters"][parameter]
+        elif component == "Intelligence Server":
+            pass
+        else:
+            for parameter, value in list(config[component]["parameters"].items()):
+                config[component]["parameters"][config[component]["path"] + parameter] = value
+                del config[component]["parameters"][parameter]
+
     return config
 
 
-parameters = {
-    "Intelligence Server": [],
-    "Tomcat": {
-        "server.xml": {
-            'Service/Connector[@port="8443"]': {
-                'keystoreFile': str(PATH_EXE + '/' + KEYSTORE).replace('/', '\\'),
-                'keystorePass': KEYSTORE_PW
-            }
-        }
-    },
-    "Web": {
-        "adminServers.xml": {
-            f'server[@name="{FQDN}"]': {
-                "name": FQDN,
-                "conn": "false"
-            }
+def get_tomcat_home():
+    try:
+        output = subprocess.check_output('sc qc "tomcat9"', universal_newlines=True)
+    except subprocess.CalledProcessError:
+        return ""
+    else:
+        for line in output.split('\n'):
+            if line.strip().startswith("BINARY_PATH_NAME"):
+                path = str(line.split(': ')[1].split(' //')[0].strip('"').split(r'\bin')[0])
+                if os.path.exists(path):
+                    return path
+                else:
+                    return ""
 
-        },
-        "microstrategy.xml": {
-            'global/parameter[@name="sslTruststore"]': {
-                "value": str("WEB-INF" + '/' + TRUSTSTORE).replace('\\', '/')
-            },
-            'global/parameter[@name="sslTruststorePwd"]': {
-                "value": TRUSTSTORE_PW
-            }
-        },
-        "sys_defaults.properties": {
-            "useEncryption": "2"
-        },
-        f"sys_defaults.{FQDN}.properties": {
-            "connectmode": "auto"
-        }
-    },
-    "Library": {
-        "configOverride.properties":
-            {
-                "trustStore.path": "file:" + str(PATH_EXE + '/' + TRUSTSTORE).replace('\\', '/'),
-                "trustStore.passphrase": TRUSTSTORE_PW,
-                "iserver.default.hostname": FQDN,
-                "iserver.default.port": SSL_PORT,
-                "iserver.tlsEnabled": "true"
-            }
-    },
-    "Collaboration Server": {
-        "config.json": {
-            "enableTls": "true",
-            "keystoreFile": str(PATH_EXE + '/' + KEYSTORE).replace('\\', '/'),
-            "passphrase": KEYSTORE_PW,
-            "trustedCerts": [str(PATH_EXE + '/' + TRUSTSTORE_PEM).replace('\\', '/')],
-            "authorizationServerUrl": f"https://{FQDN.lower()}:8443/MicroStrategyLibrary/api"
-        }
-    },
-    "Modeling Service": {
-        "application.conf": {
-            "https.port": "10443",
-            "play.server.https.keyStore.path": '"' + PATH_EXE.replace("\\", "/") + '/' + KEYSTORE + '"',
-            "play.server.https.keyStore.type": "JKS",
-            "play.server.https.keyStore.password": '"' + KEYSTORE_PW + '"'
-        },
-        "modelservice.conf": {
-            "modelservice.iserver.tlsEnabled": "true",
-            "modelservice.trustStore.path": str(PATH_EXE + '/' + TRUSTSTORE).replace('\\', '/'),
-            "modelservice.trustStore.passphrase": TRUSTSTORE_PW
-        },
-        "configOverride.properties": {
-            "services.MicroStrategy-Modeling-Service.tlsEnabled": "true",
-            "services.MicroStrategy-Modeling-Service.baseURL": f"https://{FQDN.lower()}:10443"
-        }
-    }
-}
 
 # Execution
 print("-----------------------------------------------------------------")
-print("--- Configure MSTR environment with TLS/SSL certificates v1.1 ---")
+print(f"--- Configure MSTR environment with TLS/SSL certificates {VERSION} ---")
 print("-----------------------------------------------------------------\n\n")
 ssl_toggle = False
 if not ctypes.windll.shell32.IsUserAnAdmin():
@@ -160,16 +234,18 @@ else:
         input("\n\nPress ENTER to exit")
         exit()
 
-configManager = configManager.ConfigManager(build_config(ssl_toggle), ssl_toggle, parameters)
-print("Note: Current release only supports default MicroStrategy and Library deployment names\n\n")
+config = build_config(ssl_toggle)
+configManager = configManager.ConfigManager(config, ssl_toggle)
+
 if input("CONFIRM: MicroStrategy services will be restarted automatically if required. "
          "Confirm you want to proceed. (Y/N) ").lower() == 'y':
     print("\n")
 configManager.apply()
-# configManager.restart()
+configManager.copy_truststore(f"{PATH_EXE}\\{TRUSTSTORE}", config["Web"]["path"] + "\\WEB-INF\\" + TRUSTSTORE)
+configManager.restart()
 
-print("[-] Installing root certificate into Windows Certificate Store.\n")
-# configManager.install_ca_cert()
+print("\n[-] Installing root certificate into Windows Certificate Store.\n")
+configManager.install_ca_cert(f"{PATH_EXE}\\{ROOT_CERTIFICATE}")
 print("[-] Configuration complete.\n\n")
 print("----------------------------------------------------\n")
 print("Please read:\n")
@@ -178,7 +254,7 @@ print(f"[-] Use the fully qualified domain name ({configManager.fqdn.lower()}) t
       f"    Without the FQDN, the browser will throw a certificate warning.\n\n"
       f"[-] The root CA certificate has already been installed into the Windows certificate store on\n"
       f"    this machine. If not, install it manually. To connect to this Tomcat server \n"
-      f"    from a remote machine, install first the root certificate ({configManager.root_certificate})\n"
+      f"    from a remote machine, install first the root certificate ({ROOT_CERTIFICATE})\n"
       f"    on the remote machine to avoid browser security warnings.\n"
       f"    To do so, copy the root certificate file onto the remote machine,\n"
       f"    and select 'Install Certificate'. Follow the on-screen directions.\n\n"
