@@ -453,7 +453,7 @@ def copy_truststore(source, destination):
 
 # Execution
 print("-----------------------------------------------------------------")
-print(f"--- Configure MSTR environment with TLS/SSL certificates {VERSION} ---")
+print(f"--- Configure MSTR environment with TLS/SSL certificates v{VERSION} ---")
 print("-----------------------------------------------------------------\n\n")
 
 if not ctypes.windll.shell32.IsUserAnAdmin():
