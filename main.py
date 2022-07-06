@@ -294,19 +294,19 @@ def configure_service(config_dict):
 
 
 def configure_intelligence_server(config_dict):
-    print(f"[-] {'Enabling' if ssl_toggle else 'Disabling'} TLS on I-Server.")
+    print(f"\n[+] {'Enabling' if ssl_toggle else 'Disabling'} TLS on I-Server")
     with winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE) as reg:
         with winreg.OpenKeyEx(reg, config_dict["parameters"]["registry_config"]["registry_key"],
                               0, winreg.KEY_ALL_ACCESS) as reg_key:
-            print(f'    [+] Updating registry key {config_dict["parameters"]["registry_config"]["registry_key"]}')
+            print(f'[+] Updating registry key {config_dict["parameters"]["registry_config"]["registry_key"]}')
             for key, value in config_dict["parameters"]["registry_config"]["registry_parameters"].items():
-                print(f"    [+] Setting {key} to {value}")
+                print(f"[-] Setting {key} to {value}")
                 if key != "SSLPort":
                     winreg.SetValueEx(reg_key, key, 0, winreg.REG_SZ, value)
                 else:
                     winreg.SetValueEx(reg_key, key, 0, winreg.REG_DWORD, int(hex(value), 16))
 
-    print(f"[-] {'Enabling' if ssl_toggle else 'Disabling'} TLS for REST API port")
+    print(f"[+] {'Enabling' if ssl_toggle else 'Disabling'} TLS for REST API port {REST_PORT}")
     # Get iserver cert fingerprint
     with open(config_dict["parameters"]['rest_api_config']['CertificatePath'], 'rb') as cert:
         certificate = x509.load_pem_x509_certificate(cert.read(), default_backend())
@@ -499,7 +499,7 @@ else:
     input("\n\nPress ENTER to exit")
     exit()
 
-print(">> Configuration complete.\n\n")
+print(f">> Configuration complete. TLS has been {'enabled' if ssl_toggle else 'disabled'}.\n\n")
 
 if ssl_toggle:
     print("----------------------------------------------------\n")
@@ -519,3 +519,4 @@ if ssl_toggle:
           f"    'No encryption'.")
 
 input("\n\nPress ENTER to exit")
+exit()
