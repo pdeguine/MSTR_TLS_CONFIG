@@ -171,9 +171,7 @@ def build_config(ssl_enabled, installed_components):
                         "trustStore.passphrase": TRUSTSTORE_PW if ssl_enabled else "",
                         "iserver.default.hostname": FQDN,
                         "iserver.default.port": SSL_PORT if ssl_enabled else NO_SSL_PORT,
-                        "iserver.tlsEnabled": "true" if ssl_enabled else "false",
-                        "services.collaboration.baseURL":  f"https://{FQDN.lower()}:3000" if ssl_enabled else f"http://{FQDN.lower()}:3000",
-                        "services.collaboration.tlsEnabled": "true" if ssl_enabled else "false"
+                        "iserver.tlsEnabled": "true" if ssl_enabled else "false"
                     }
             }
         },
@@ -347,10 +345,9 @@ def install_ca_cert(root_certificate):
 
     try:
         store.CertAddEncodedCertificateToStore(X509_ASN_ENCODING, cert_byte, CERT_STORE_ADD_REPLACE_EXISTING)
-    except Exception as e:
+    except:
         print("WARNING: Installation of root certificate failed. To manually install the root certificate \n"
-              f"on this machine, install {root_certificate} with right-click > Install Certificate.\n")
-        print(e)
+              f"on this machine, install {root_certificate} with right-click > Install Certificate.")
     finally:
         store.CertCloseStore(CERT_CLOSE_STORE_FORCE_FLAG)
 
@@ -386,7 +383,7 @@ def update_config_file(filepath, property_values):
                     else:
                         if value != "":
                             print(f"[-] Setting {key} to {value}")
-                            lines.append(f"\n{key}={value}")
+                            lines.append(f"{key}={value}\n")
                         else:
                             print(f"[-] Removing {key}")
                     file.truncate(0)
