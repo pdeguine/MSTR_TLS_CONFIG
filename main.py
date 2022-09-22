@@ -401,7 +401,11 @@ def update_config_file(filepath, property_values):
 
     # if file is an .xml file
     elif filepath.endswith('.xml'):
-        file = eT.parse(filepath)
+        if os.path.exists(filepath):
+            file = eT.parse(filepath)
+        else:
+            root_element = eT.Element("servers", version="1.0")
+            file = eT.ElementTree(root_element)
         root = file.getroot()
         for key, value in property_values.items():
             xml_tag = root.find(key)
@@ -421,6 +425,7 @@ def update_config_file(filepath, property_values):
 
         xml.etree.ElementTree.indent(root)
         file.write(filepath)
+
 
     # If file is a .json file
     elif filepath.endswith('.json'):
