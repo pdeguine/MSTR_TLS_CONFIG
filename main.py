@@ -401,6 +401,7 @@ def update_config_file(filepath, property_values):
 
     # if file is an .xml file
     elif filepath.endswith('.xml'):
+        # fix non existing adminServers.xml crash
         if os.path.exists(filepath):
             file = eT.parse(filepath)
         else:
