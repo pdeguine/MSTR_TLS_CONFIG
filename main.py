@@ -17,7 +17,8 @@ from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 
-PATH_EXE = os.path.dirname(sys.executable)
+# PATH_EXE = os.path.dirname(sys.executable)
+PATH_EXE = "C:/Users/pdeguine/Desktop/MSTR_TLS_CONFIG_v1"
 KEYSTORE_PW = 'm$tr!23'
 KEYSTORE = 'TSkeystore.pfx'
 CERTIFICATE = "iserver_cert.pem"
@@ -368,28 +369,54 @@ def update_config_file(filepath, property_values):
     # If file path points to .properties or .conf file
     if filepath.endswith('.properties') or filepath.endswith('.conf'):
         if os.path.exists(filepath):
-            with open(filepath, 'r+') as file:
-                lines = file.readlines()
+            with open(filepath, "r+") as config_file:
+                lines = [line.strip('\n') for line in config_file.readlines()]
                 for key, value in property_values.items():
-                    if any(key in default_property for default_property in lines):
-                        for i in range(len(lines)):
-                            if lines[i].startswith(key):
-                                if value != "":
-                                    print(f"[-] Setting {key} to {value}")
-                                    lines[i] = f"{key}={value}\n"
-                                else:
-                                    print(f"[-] Removing {key}")
-                                    lines[i] = ""
-                    else:
+                    try:
+                        parameter_index = list(parameter.startswith(key) for parameter in lines).index(True)
                         if value != "":
-                            print(f"[-] Setting {key} to {value}")
-                            lines.append(f"{key}={value}\n")
+                            lines[parameter_index] = f"{key}={value}"
                         else:
-                            print(f"[-] Removing {key}")
-                    file.truncate(0)
-                    file.seek(0)
-                    for default_property in lines:
-                        file.write(default_property)
+                            lines[parameter_index] = ""
+                        print(f"[-] Setting {key} to {value}") if value != "" else print(f"[-] Removing {key}")
+
+                    except ValueError:
+                        lines.append(key + "=" + value)
+                        print(f"[-] Setting {key} to {value}")
+                config_file.truncate(0)
+                config_file.seek(0)
+                config_file.write('\n'.join(lines))
+            # OLD IMPLEMENTATION _ CAN BE DELETED IF NO BUGS REPORTED
+            # with open(filepath, 'r+') as file:
+            #     lines = file.readlines()
+            #     for key, value in property_values.items():
+            #         if any(key in default_property for default_property in lines):
+            #             found = False
+            #             for i in range(len(lines)):
+            #                 if lines[i].startswith(key):
+            #                     found = True
+            #                     if value != "":
+            #                         print(f"[-] Setting {key} to {value}")
+            #                         lines[i] = f"{key}={value}\n"
+            #                     else:
+            #                         print(f"[-] Removing {key}")
+            #                         lines[i] = ""
+            #             if not found:
+            #                 if value != "":
+            #                     print(f"[-] Setting {key} to {value}")
+            #                     lines.append(f"{key}={value}\n")
+            #                 else:
+            #                     print(f"[-] Removing {key}")
+            #         else:
+            #             if value != "":
+            #                 print(f"[-] Setting {key} to {value}")
+            #                 lines.append(f"{key}={value}\n")
+            #             else:
+            #                 print(f"[-] Removing {key}")
+            #         file.truncate(0)
+            #         file.seek(0)
+            #         for default_property in lines:
+            #             file.write(default_property)
         else:
             with open(filepath, 'w') as file:
                 for key, value in property_values.items():
@@ -401,7 +428,12 @@ def update_config_file(filepath, property_values):
 
     # if file is an .xml file
     elif filepath.endswith('.xml'):
-        file = eT.parse(filepath)
+        # fix non existing adminServers.xml crash
+        if os.path.exists(filepath):
+            file = eT.parse(filepath)
+        else:
+            root_element = eT.Element("servers", version="1.0")
+            file = eT.ElementTree(root_element)
         root = file.getroot()
         for key, value in property_values.items():
             xml_tag = root.find(key)
@@ -421,6 +453,7 @@ def update_config_file(filepath, property_values):
 
         xml.etree.ElementTree.indent(root)
         file.write(filepath)
+
 
     # If file is a .json file
     elif filepath.endswith('.json'):
