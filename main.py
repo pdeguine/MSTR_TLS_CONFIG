@@ -17,8 +17,8 @@ from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 
-# PATH_EXE = os.path.dirname(sys.executable)
-PATH_EXE = "C:/Users/pdeguine/Desktop/MSTR_TLS_CONFIG_v1"
+PATH_EXE = os.path.dirname(sys.executable)
+# PATH_EXE = "C:/Users/pdeguine/Desktop/MSTR_TLS_CONFIG_v1"
 KEYSTORE_PW = 'm$tr!23'
 KEYSTORE = 'TSkeystore.pfx'
 CERTIFICATE = "iserver_cert.pem"
@@ -38,13 +38,13 @@ VERSION = "1.1"
 REST_PORT = 34962
 ssl_toggle = False
 ssl_artifact_path = {
-    KEYSTORE: f"{PATH_EXE}\\{KEYSTORE}",
-    CERTIFICATE: f"{PATH_EXE}\\{CERTIFICATE}",
-    KEY: f"{PATH_EXE}\\{KEY}",
-    TRUSTSTORE: f"{PATH_EXE}\\{TRUSTSTORE}",
-    ROOT_CERTIFICATE: f"{PATH_EXE}\\{ROOT_CERTIFICATE}",
-    TRUSTSTORE_PEM: f"{PATH_EXE}\\{TRUSTSTORE_PEM}",
-    I_SERVER_PFX: f"{PATH_EXE}\\{I_SERVER_PFX}"
+    KEYSTORE: f"{PATH_EXE}/{KEYSTORE}",
+    CERTIFICATE: f"{PATH_EXE}/{CERTIFICATE}",
+    KEY: f"{PATH_EXE}/{KEY}",
+    TRUSTSTORE: f"{PATH_EXE}/{TRUSTSTORE}",
+    ROOT_CERTIFICATE: f"{PATH_EXE}/{ROOT_CERTIFICATE}",
+    TRUSTSTORE_PEM: f"{PATH_EXE}/{TRUSTSTORE_PEM}",
+    I_SERVER_PFX: f"{PATH_EXE}/{I_SERVER_PFX}"
 }
 
 component_path_service_names = {
@@ -83,14 +83,18 @@ component_path_service_names = {
 
 def check_ssl_artifacts_exist(artifact_dict):
     # Verify all ssl artifacts are available on their physical location
+    missing_artifacts = False
     for ssl_artifact, path in artifact_dict.items():
         if not os.path.exists(path):
             print(
                 f"WARNING: {ssl_artifact} not found. Make sure it exists in same directory as the executable.\n\n")
-            input("Press ENTER to exit.")
-            exit()
-        else:
-            return True
+            missing_artifacts = True
+
+    if missing_artifacts:
+        input("Press ENTER to exit.")
+        exit()
+    else:
+        return True
 
 
 def build_config(ssl_enabled, installed_components):
