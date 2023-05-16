@@ -31,11 +31,11 @@ TRUSTSTORE_PW = "m$tr!23"
 TRUSTSTORE_PEM = "MSTRTSRootCA.pem"
 ROOT_CERTIFICATE = "MSTRTSRootCA.crt"
 I_SERVER_PFX = "iserver.pfx"
-SSL_PORT = 39321
-NO_SSL_PORT = 34952
+SSL_PORT = "39321"
+NO_SSL_PORT = "34952"
 FQDN = socket.getfqdn().upper()
 VERSION = "1.1"
-REST_PORT = 34962
+REST_PORT = "34962"
 ssl_toggle = False
 ssl_artifact_path = {
     KEYSTORE: f"{PATH_EXE}/{KEYSTORE}",
@@ -385,7 +385,7 @@ def update_config_file(filepath, property_values):
                         print(f"[-] Setting {key} to {value}") if value != "" else print(f"[-] Removing {key}")
 
                     except ValueError:
-                        lines.append(key + "=" + value)
+                        lines.append(key + "=" + str(value))
                         print(f"[-] Setting {key} to {value}")
                 config_file.truncate(0)
                 config_file.seek(0)
